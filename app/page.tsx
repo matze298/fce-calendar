@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -25,16 +26,18 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col gap-4 w-full mt-12 sm:flex-row">
-          <button
+          <Link
+            href="/admin"
             className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary text-secondary font-bold transition-all hover:opacity-90 shadow-md sm:w-48"
           >
             Schichten verwalten
-          </button>
-          <button
+          </Link>
+          <Link
+            href="/login"
             className="flex h-12 w-full items-center justify-center rounded-lg border-2 border-secondary px-5 font-bold text-secondary transition-colors hover:bg-secondary hover:text-white sm:w-48"
           >
             Mitglieder-Login
-          </button>
+          </Link>
         </div>
       </main>
       

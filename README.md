@@ -38,6 +38,15 @@ NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-long-anon-jwt-key
 ```
 
+### 4. Authentication Setup
+This project uses Supabase Auth for the Admin area.
+
+1. **Enable Email Auth:** In the Supabase Dashboard, go to **Authentication -> Providers** and ensure **Email** is enabled.
+2. **Registration:** You can create new accounts via the `/register` page in the app.
+3. **Email Confirmation:** By default, Supabase requires users to confirm their email address. 
+   - **For Testing:** You can disable this in **Authentication -> Settings -> User Signup** by toggling off "Confirm email".
+   - **Local Dev:** If you use the `dev@localhost` / `devpassword` credentials, you must manually create this user in the **Authentication -> Users** tab of the Supabase Dashboard.
+
 ## Getting Started
 
 To run both the **Next.js frontend** and the **Python API routes** simultaneously, you must use the Vercel CLI:

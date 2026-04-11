@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 type Member = {
@@ -10,6 +11,9 @@ type Member = {
   email: string;
   seniority_level: string;
   historical_shifts: number;
+  is_approved: boolean;
+  is_admin: boolean;
+  created_at: string;
 };
 
 type WorkDate = {
@@ -33,44 +37,62 @@ export default function AdminDashboard() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const router = useRouter();
 
   const fetchData = async () => {
     setLoading(true);
-    console.log('INFO: Starting fetch from Supabase...');
     
-    try {
-      const { data: membersData, error: membersError } = await supabase
-        .from('members')
-        .select('*')
-        .order('name');
-      
-      if (membersError) console.error('ERROR (Members):', membersError);
-      console.log('INFO: Members fetch result:', membersData?.length || 0, 'entries');
-      
-      const { data: datesData, error: datesError } = await supabase
-        .from('work_dates')
-        .select('*')
-        .order('date');
-
-      if (datesError) console.error('ERROR (Dates):', datesError);
-      console.log('INFO: Dates fetch result:', datesData?.length || 0, 'entries');
-
-      const { data: assignData, error: assignError } = await supabase
-        .from('assignments')
-        .select('*, members(name)')
-        .eq('status', 'Draft');
-
-      if (assignError) console.error('ERROR (Assignments):', assignError);
-      console.log('INFO: Assignments fetch result:', assignData?.length || 0, 'entries');
-
-      if (membersData) setMembers(membersData);
-      if (datesData) setWorkDates(datesData);
-      if (assignData) setAssignments(assignData as any);
-    } catch (err) {
-      console.error('CRITICAL: Unexpected error in fetchData:', err);
-    } finally {
-      setLoading(false);
+    // Check Auth Status & Permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/login');
+      return;
     }
+
+    const { data: profile } = await supabase
+      .from('members')
+      .select('is_admin, is_approved')
+      .eq('auth_id', user.id)
+      .single();
+
+    if (!profile || !profile.is_admin || !profile.is_approved) {
+      setIsAdmin(false);
+      setLoading(false);
+      return;
+    }
+
+    setIsAdmin(true);
+
+    const { data: membersData } = await supabase
+      .from('members')
+      .select('*')
+      .order('name');
+    
+    const { data: datesData } = await supabase
+      .from('work_dates')
+      .select('*')
+      .order('date');
+
+    const { data: assignData } = await supabase
+      .from('assignments')
+      .select('*, members(name)')
+      .eq('status', 'Draft');
+
+    if (membersData) setMembers(membersData);
+    if (datesData) setWorkDates(datesData);
+    if (assignData) setAssignments(assignData as any);
+    setLoading(false);
+  };
+
+  const approveMember = async (id: string) => {
+    const { error } = await supabase
+      .from('members')
+      .update({ is_approved: true })
+      .eq('id', id);
+    
+    if (error) alert(error.message);
+    else fetchData();
   };
 
   useEffect(() => {
@@ -126,17 +148,38 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background gap-4">
-        <div className="text-xl font-bold animate-pulse text-secondary">Lade Daten von Supabase...</div>
-        <div className="text-xs text-muted max-w-xs text-center truncate">
-          URL: {process.env.NEXT_PUBLIC_SUPABASE_URL}
+        <div className="text-xl font-bold animate-pulse text-secondary text-center">
+          Wird geprüft...
         </div>
       </div>
     );
   }
 
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md">
+          <h2 className="text-2xl font-bold text-secondary mb-4">Zugriff verweigert</h2>
+          <p className="text-muted mb-8">
+            Ihr Konto ist noch nicht für den Admin-Bereich freigeschaltet. 
+            Bitte kontaktieren Sie einen Administrator zur Freigabe.
+          </p>
+          <button 
+            onClick={() => router.push('/')}
+            className="w-full bg-secondary text-white py-3 rounded-lg font-bold"
+          >
+            Zurück zur Startseite
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const pendingMembers = members.filter(m => !m.is_approved);
+  const approvedMembers = members.filter(m => m.is_approved);
+
   return (
     <div className="min-h-screen bg-background pb-12">
-      {/* Header */}
       <header className="bg-secondary text-white py-6 px-4 shadow-md sticky top-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -161,7 +204,34 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8 space-y-12">
-        {/* Work Dates Section */}
+        {pendingMembers.length > 0 && (
+          <section className="bg-primary/10 p-6 rounded-2xl border-2 border-primary border-dashed">
+            <h2 className="text-xl font-bold text-secondary mb-4 flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-secondary"></span>
+              </span>
+              Ausstehende Freischaltungen
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {pendingMembers.map((m) => (
+                <div key={m.id} className="bg-white p-4 rounded-xl shadow-sm flex items-center justify-between border border-primary/30">
+                  <div>
+                    <p className="font-bold text-secondary">{m.email}</p>
+                    <p className="text-[10px] text-muted">Registriert am: {new Date(m.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <button 
+                    onClick={() => approveMember(m.id)}
+                    className="bg-secondary text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-black transition-colors"
+                  >
+                    Freischalten
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
@@ -204,7 +274,6 @@ export default function AdminDashboard() {
                     </span>
                   </div>
 
-                  {/* Assigned Members List */}
                   <div className="space-y-2 mt-4 pt-4 border-t border-gray-50">
                     {currentAssignments.length > 0 ? (
                       currentAssignments.map((a) => (
@@ -227,7 +296,6 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Members Section */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
@@ -237,7 +305,7 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {members.length > 0 ? members.map((m) => (
+            {approvedMembers.length > 0 ? approvedMembers.map((m) => (
               <div key={m.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                 <div>
                   <h3 className="font-bold text-secondary">{m.name}</h3>
