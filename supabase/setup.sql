@@ -55,15 +55,20 @@ ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE work_dates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assignments ENABLE ROW LEVEL SECURITY;
 
--- Strict Admin-Only Policies
-CREATE POLICY "Admins can do everything on members" ON members
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- Strict Admin-Only Policies (Updated for Prototype)
+-- Allow 'anon' to read so we can see the calendar without login
+-- Allow 'authenticated' (Admins) to do everything
 
-CREATE POLICY "Admins can do everything on work_dates" ON work_dates
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Anyone can view members" ON members FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admins can do everything on members" ON members FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Admins can do everything on assignments" ON assignments
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Anyone can view work_dates" ON work_dates FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admins can do everything on work_dates" ON work_dates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Anyone can view assignments" ON assignments FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Anyone can insert assignments" ON assignments FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Anyone can delete assignments" ON assignments FOR DELETE TO anon, authenticated USING (true);
+CREATE POLICY "Admins can do everything on assignments" ON assignments FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 6. Seed Data: 50 realistic German members
 INSERT INTO members (name, email, seniority_level, availability, historical_shifts) VALUES

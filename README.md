@@ -27,28 +27,34 @@ Create a `.env.local` file in the root directory and add your Supabase credentia
 2. Select your project.
 3. Go to **Project Settings** (gear icon at the bottom of the sidebar).
 4. Click on **API**.
-5. Copy the **Project URL** and the **`anon` public API Key**.
+5. Copy the **Project URL** and the **`anon` public API Key** (also called the **Publishable** key). 
+
+**Important Security Note:**
+- **YES (Use this):** `anon` public key (starts with `eyJ...`). This is safe to use in the browser with RLS enabled.
+- **NO (Do NOT use):** `service_role` secret key. This key bypasses all security rules and should **never** be exposed in a `.env.local` file that starts with `NEXT_PUBLIC_`.
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-long-anon-jwt-key
 ```
 
 ## Getting Started
 
-First, run the development server:
+To run both the **Next.js frontend** and the **Python API routes** simultaneously, you must use the Vercel CLI:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Install Vercel CLI (if not already done):**
+   ```bash
+   npm install
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. **Run the development server:**
+   ```bash
+   npx vercel dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+**Note:** Standard `npm run dev` only starts the Next.js server and will not handle the Python `/api` routes, leading to network errors when generating the schedule.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

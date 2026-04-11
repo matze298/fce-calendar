@@ -36,26 +36,41 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     setLoading(true);
+    console.log('INFO: Starting fetch from Supabase...');
     
-    const { data: membersData } = await supabase
-      .from('members')
-      .select('*')
-      .order('name');
-    
-    const { data: datesData } = await supabase
-      .from('work_dates')
-      .select('*')
-      .order('date');
+    try {
+      const { data: membersData, error: membersError } = await supabase
+        .from('members')
+        .select('*')
+        .order('name');
+      
+      if (membersError) console.error('ERROR (Members):', membersError);
+      console.log('INFO: Members fetch result:', membersData?.length || 0, 'entries');
+      
+      const { data: datesData, error: datesError } = await supabase
+        .from('work_dates')
+        .select('*')
+        .order('date');
 
-    const { data: assignData } = await supabase
-      .from('assignments')
-      .select('*, members(name)')
-      .eq('status', 'Draft');
+      if (datesError) console.error('ERROR (Dates):', datesError);
+      console.log('INFO: Dates fetch result:', datesData?.length || 0, 'entries');
 
-    if (membersData) setMembers(membersData);
-    if (datesData) setWorkDates(datesData);
-    if (assignData) setAssignments(assignData as any);
-    setLoading(false);
+      const { data: assignData, error: assignError } = await supabase
+        .from('assignments')
+        .select('*, members(name)')
+        .eq('status', 'Draft');
+
+      if (assignError) console.error('ERROR (Assignments):', assignError);
+      console.log('INFO: Assignments fetch result:', assignData?.length || 0, 'entries');
+
+      if (membersData) setMembers(membersData);
+      if (datesData) setWorkDates(datesData);
+      if (assignData) setAssignments(assignData as any);
+    } catch (err) {
+      console.error('CRITICAL: Unexpected error in fetchData:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -65,17 +80,27 @@ export default function AdminDashboard() {
   const generateSchedule = async () => {
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/generate', { method: 'POST' });
-      const result = await response.json();
+      const response = await fetch('/api/generate', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        result = { error: `Server antwortete mit: ${text.substring(0, 100)}...` };
+      }
       
       if (response.ok) {
         alert(`Erfolg: ${result.assignments_count} Schichten wurden als Entwurf geplant.`);
         await fetchData();
       } else {
-        alert('Fehler bei der Generierung: ' + result.error);
+        alert(`API-Fehler (${response.status}): ${result.error || 'Unbekannter Fehler'}`);
       }
-    } catch (err) {
-      alert('Netzwerkfehler: Der Server ist nicht erreichbar.');
+    } catch (err: any) {
+      alert(`Verbindungsfehler: ${err.message || 'Der Server ist nicht erreichbar'}. Stellen Sie sicher, dass 'npx vercel dev' läuft.`);
     } finally {
       setIsGenerating(false);
     }
@@ -100,8 +125,11 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-xl font-bold animate-pulse text-secondary">Lade Daten...</div>
+      <div className="flex h-screen flex-col items-center justify-center bg-background gap-4">
+        <div className="text-xl font-bold animate-pulse text-secondary">Lade Daten von Supabase...</div>
+        <div className="text-xs text-muted max-w-xs text-center truncate">
+          URL: {process.env.NEXT_PUBLIC_SUPABASE_URL}
+        </div>
       </div>
     );
   }
@@ -143,7 +171,7 @@ export default function AdminDashboard() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {workDates.map((wd) => {
+            {workDates.length > 0 ? workDates.map((wd) => {
               const currentAssignments = assignments.filter(a => a.workdate_id === wd.id);
               return (
                 <div 
@@ -191,7 +219,11 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               );
-            })}
+            }) : (
+              <div className="col-span-full py-12 text-center bg-white rounded-xl border-2 border-dashed border-gray-100">
+                <p className="text-muted italic">Keine Arbeitstage gefunden. Führen Sie das Setup-Script in Supabase aus.</p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -205,7 +237,7 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {members.map((m) => (
+            {members.length > 0 ? members.map((m) => (
               <div key={m.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                 <div>
                   <h3 className="font-bold text-secondary">{m.name}</h3>
@@ -229,7 +261,11 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="col-span-full py-12 text-center bg-white rounded-xl border-2 border-dashed border-gray-100">
+                <p className="text-muted italic">Keine Mitglieder gefunden. Prüfen Sie Ihre Datenbankverbindung.</p>
+              </div>
+            )}
           </div>
         </section>
       </main>
