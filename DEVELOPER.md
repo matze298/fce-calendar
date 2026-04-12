@@ -34,7 +34,7 @@ To start the project locally, follow these steps:
    ```
 4. **Login:**
    Register via the app or use the test account:
-   - **User:** `matze29894@gmail.com`
+   - **User:** `dev@localhost.test`
    - **Pass:** `devpassword`
    *(Note: The Admin status must be linked to the `auth_id` in the database).*
 

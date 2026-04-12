@@ -128,7 +128,7 @@ INSERT INTO members (name, email, seniority_level, availability, historical_shif
 
 -- Add the default Admin
 INSERT INTO members (name, email, is_approved, is_admin)
-VALUES ('Admin', 'matze29894@gmail.com', true, true)
+VALUES ('Admin', 'dev@localhost.test', true, true)
 ON CONFLICT (email) DO UPDATE SET is_approved = true, is_admin = true;
 
 -- 7. Seed Data: 6 months of empty WorkDates (May 2026 - Oct 2026)
