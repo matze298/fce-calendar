@@ -42,7 +42,7 @@ export default function Home() {
       </main>
       
       <footer className="py-8 text-muted text-sm">
-        © {new Date().getFullYear()} 1. FC Egenhausen 1965 e.V.
+        © {new Date().getFullYear()} 1. FC Egenhausen 1921 e.V.
       </footer>
     </div>
   );

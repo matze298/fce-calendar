@@ -46,7 +46,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold uppercase tracking-wider text-primary">
             Interner Bereich
           </h1>
-          <p className="text-sm text-gray-300 mt-2 italic">1. FC Egenhausen 1965 e.V.</p>
+          <p className="text-sm text-gray-300 mt-2 italic">1. FC Egenhausen 1921 e.V.</p>
         </div>
 
         {/* Form Container */}
