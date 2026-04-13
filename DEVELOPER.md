@@ -38,7 +38,25 @@ To start the project locally, follow these steps:
    - **Pass:** `devpassword`
    *(Note: The Admin status must be linked to the `auth_id` in the database).*
 
-## 4. Authentication & Permissions
+## 4. Mobile Testing (Same Wi-Fi)
+
+To test the application on a mobile device within the same local network:
+
+1. **Start the server on all interfaces:**
+   By default, the server only listens on `localhost`. Use the following command to allow external access:
+   ```bash
+   npm run dev -- --hostname 0.0.0.0
+   ```
+2. **Find your Local IP:**
+   - Windows (PowerShell): `ipconfig` (Look for `IPv4 Address`)
+   - Linux/Mac: `hostname -I`
+3. **Access on Phone:**
+   Open your phone's browser and navigate to `http://<YOUR_IP>:3000`.
+
+### ⚠️ Supabase Auth Redirects
+If testing login on mobile, you must add `http://<YOUR_IP>:3000` to the **Redirect URLs** in your [Supabase Dashboard](https://supabase.com/dashboard) under *Authentication -> URL Configuration*.
+
+## 5. Authentication & Permissions
 The system uses a two-stage approval process:
 - **Registration:** Anyone can create an account, but will initially have no access.
 - **Approval:** An administrator must approve new accounts in the Admin Dashboard (`is_approved`).
