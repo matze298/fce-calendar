@@ -14,7 +14,7 @@ export default function Home() {
             priority
             className="drop-shadow-md"
           />
-          
+
           <div className="flex flex-col items-center gap-4 text-center sm:items-start sm:text-left">
             <h1 className="text-4xl font-bold tracking-tight text-secondary">
               FCE Schichtkalender
@@ -40,7 +40,7 @@ export default function Home() {
           </Link>
         </div>
       </main>
-      
+
       <footer className="py-8 text-muted text-sm">
         © {new Date().getFullYear()} 1. FC Egenhausen 1921 e.V.
       </footer>

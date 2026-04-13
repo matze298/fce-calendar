@@ -21,7 +21,7 @@ jobs:
           if [ ! -d "supabase" ]; then
             supabase init
           fi
-          
+
           # Move setup.sql to migrations if it exists to verify it
           if [ -f "supabase/setup.sql" ]; then
             mkdir -p supabase/migrations

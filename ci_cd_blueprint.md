@@ -3,7 +3,7 @@
 ## 1. CI/CD Architecture & Philosophy
 * **Version Control:** GitHub.
 * **Branching Strategy:** Feature branches (e.g., `feature/new-ui`) merge into `main` via Pull Requests (PRs). **Never push directly to main.**
-* **Continuous Deployment (CD):** Handled natively by Vercel. 
+* **Continuous Deployment (CD):** Handled natively by Vercel.
     * Every PR generates a temporary Vercel Preview URL.
     * Every merge to `main` auto-deploys to Production.
 * **Continuous Integration (CI):** Handled by GitHub Actions. Runs automatically on every PR to ensure code quality, test the Python algorithm, and verify database migrations.

@@ -45,7 +45,7 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     setLoading(true);
-    
+
     // Check Auth Status & Permissions
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
       .from('members')
       .select('*')
       .order('name');
-    
+
     const { data: datesData } = await supabase
       .from('work_dates')
       .select('*')
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
       .from('members')
       .update({ is_approved: true })
       .eq('id', id);
-    
+
     if (error) alert(error.message);
     else fetchData();
   };
@@ -129,11 +129,11 @@ export default function AdminDashboard() {
   const generateSchedule = async () => {
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/generate', { 
+      const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      
+
       const text = await response.text();
       let result;
       try {
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
       } catch (e) {
         result = { error: `Server antwortete mit: ${text.substring(0, 100)}...` };
       }
-      
+
       if (response.ok) {
         alert(`Erfolg: ${result.assignments_count} Schichten wurden als Entwurf geplant.`);
         await fetchData();
@@ -188,10 +188,10 @@ export default function AdminDashboard() {
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md">
           <h2 className="text-2xl font-bold text-secondary mb-4">Zugriff verweigert</h2>
           <p className="text-muted mb-8">
-            Ihr Konto ist noch nicht für den Admin-Bereich freigeschaltet. 
+            Ihr Konto ist noch nicht für den Admin-Bereich freigeschaltet.
             Bitte kontaktieren Sie einen Administrator zur Freigabe.
           </p>
-          <button 
+          <button
             onClick={() => router.push('/')}
             className="w-full bg-secondary text-white py-3 rounded-lg font-bold"
           >
@@ -210,23 +210,23 @@ export default function AdminDashboard() {
       <header className="bg-secondary text-white py-6 px-4 shadow-md sticky top-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image 
-              src="/fce-logo.png" 
-              alt="Logo" 
-              width={40} 
-              height={40} 
+            <Image
+              src="/fce-logo.png"
+              alt="Logo"
+              width={40}
+              height={40}
               style={{ width: '40px', height: 'auto' }}
             />
             <h1 className="text-xl font-bold">Admin-Bereich</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Link 
+            <Link
               href="/admin/dates"
               className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-lg font-bold text-sm hover:bg-white/20 transition-all flex items-center gap-2"
             >
               Termine verwalten
             </Link>
-            <button 
+            <button
               className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
               onClick={generateSchedule}
               disabled={isGenerating}
@@ -261,7 +261,7 @@ export default function AdminDashboard() {
                     <p className="font-bold text-secondary">{m.email}</p>
                     <p className="text-[10px] text-muted">Registriert am: {new Date(m.created_at).toLocaleDateString()}</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => approveMember(m.id)}
                     className="bg-secondary text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-black transition-colors"
                   >
@@ -280,25 +280,25 @@ export default function AdminDashboard() {
             </h2>
             <span className="text-sm font-medium text-muted">{workDates.length} Termine</span>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {workDates.length > 0 ? workDates.map((wd) => {
               const currentAssignments = assignments.filter(a => a.workdate_id === wd.id);
               return (
-                <div 
-                  key={wd.id} 
+                <div
+                  key={wd.id}
                   className={`p-5 rounded-xl border-2 transition-all shadow-sm bg-white ${
-                    wd.is_important_shift 
-                      ? 'border-primary ring-1 ring-primary/20' 
+                    wd.is_important_shift
+                      ? 'border-primary ring-1 ring-primary/20'
                       : 'border-transparent'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-lg font-bold text-secondary">
-                      {new Date(wd.date).toLocaleDateString('de-DE', { 
-                        weekday: 'short', 
-                        day: '2-digit', 
-                        month: '2-digit' 
+                      {new Date(wd.date).toLocaleDateString('de-DE', {
+                        weekday: 'short',
+                        day: '2-digit',
+                        month: '2-digit'
                       })}
                     </span>
                     {wd.is_important_shift && (
@@ -307,7 +307,7 @@ export default function AdminDashboard() {
                       </span>
                     )}
                   </div>
-                  
+
                   <div className="text-muted text-xs mb-4 flex items-center justify-between">
                     <span>Bedarf: {wd.required_people} {wd.required_people === 1 ? 'Person' : 'Personen'}</span>
                     <span className={currentAssignments.length >= wd.required_people ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
@@ -362,14 +362,14 @@ export default function AdminDashboard() {
                     <p className="text-[10px] text-muted mt-2">Dienste: {m.historical_shifts}</p>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
+                    <button
                       onClick={() => setEditingMember(m)}
                       className="p-2 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
                       title="Mitglied bearbeiten"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                     </button>
-                    <button 
+                    <button
                       onClick={() => deleteMember(m.id, m.name)}
                       className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                       title="Mitglied gemäß DSGVO löschen"
@@ -396,14 +396,14 @@ export default function AdminDashboard() {
               <h2 className="text-xl font-bold">Mitglied bearbeiten</h2>
               <button onClick={() => setEditingMember(null)} className="hover:text-primary transition-colors text-2xl">&times;</button>
             </div>
-            
+
             <form onSubmit={saveMember} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 md:col-span-1">
                   <label className="block text-xs font-bold text-muted mb-1 uppercase">Name</label>
-                  <input 
-                    type="text" 
-                    value={editingMember.name} 
+                  <input
+                    type="text"
+                    value={editingMember.name}
                     onChange={e => setEditingMember({...editingMember, name: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
                     required
@@ -411,9 +411,9 @@ export default function AdminDashboard() {
                 </div>
                 <div className="col-span-2 md:col-span-1">
                   <label className="block text-xs font-bold text-muted mb-1 uppercase">Email</label>
-                  <input 
-                    type="email" 
-                    value={editingMember.email} 
+                  <input
+                    type="email"
+                    value={editingMember.email}
                     onChange={e => setEditingMember({...editingMember, email: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
                     required
@@ -424,7 +424,7 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1 uppercase">Status</label>
-                  <select 
+                  <select
                     value={editingMember.seniority_level}
                     onChange={e => setEditingMember({...editingMember, seniority_level: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
@@ -436,7 +436,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1 uppercase">Verfügbarkeit</label>
-                  <select 
+                  <select
                     value={editingMember.availability}
                     onChange={e => setEditingMember({...editingMember, availability: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
@@ -450,8 +450,8 @@ export default function AdminDashboard() {
 
               <div>
                 <label className="block text-xs font-bold text-muted mb-1 uppercase">Bisherige Schichten</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={editingMember.historical_shifts}
                   onChange={e => setEditingMember({...editingMember, historical_shifts: parseInt(e.target.value)})}
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
@@ -459,8 +459,8 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex items-center gap-2 py-2">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="exempt"
                   checked={editingMember.exempt}
                   onChange={e => setEditingMember({...editingMember, exempt: e.target.checked})}
@@ -470,14 +470,14 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <button 
+                <button
                   type="button"
                   onClick={() => setEditingMember(null)}
                   className="flex-1 px-4 py-3 border-2 border-gray-100 rounded-xl font-bold text-secondary hover:bg-gray-50 transition-colors"
                 >
                   Abbrechen
                 </button>
-                <button 
+                <button
                   type="submit"
                   className="flex-1 px-4 py-3 bg-primary text-secondary rounded-xl font-black shadow-md hover:opacity-90 transition-all"
                 >

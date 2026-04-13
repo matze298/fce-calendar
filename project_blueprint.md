@@ -9,7 +9,7 @@
 
 ## 2. UI/UX & Brand Integration (Seamless Design)
 * **Brand Identity:** Design must match `https://www.fcegenhausen.de/` and the Black and Yellow crest of 1. FC Egenhausen 1921.
-* **Primary Color:** Golden Yellow (`#FFD700`) for primary actions, buttons, and active states. 
+* **Primary Color:** Golden Yellow (`#FFD700`) for primary actions, buttons, and active states.
 * **Secondary Color:** Deep Black (`#000000`) for navigation bars, headers, and high-contrast text.
 * **Backgrounds:** Clean White (`#FFFFFF`) or very light gray (`#F8F9FA`) for content cards.
 * **Localization:** Fully localized in **German** to cater to the local club members and admins.

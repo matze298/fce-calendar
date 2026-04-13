@@ -9,8 +9,8 @@ test.describe('Admin Dashboard', () => {
         token_type: 'bearer',
         expires_in: 3600,
         refresh_token: 'fake-refresh',
-        user: { 
-          id: 'mock-user-id', 
+        user: {
+          id: 'mock-user-id',
           email: 'admin@fce.de',
           aud: 'authenticated',
           role: 'authenticated',
@@ -35,7 +35,7 @@ test.describe('Admin Dashboard', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           user: { id: 'mock-user-id', email: 'admin@fce.de' },
           access_token: 'fake-token'
         }),
