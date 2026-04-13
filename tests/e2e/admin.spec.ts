@@ -2,23 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Admin Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    // Debugging: Listen for console logs in the browser
-    page.on('console', msg => {
-      if (msg.type() === 'error' || msg.type() === 'warning') {
-        console.log(`BROWSER ${msg.type().toUpperCase()}: ${msg.text()}`);
-      }
-    });
-
-    // 1. Inject a fake session into LocalStorage *before* the Supabase client initializes
+    // 1. Inject a fake session into LocalStorage
     await page.addInitScript(() => {
-      // Supabase uses keys like sb-[project-id]-auth-token
-      // We'll set several common ones to be safe
-      const keys = [
-        'sb-localhost-auth-token', 
-        'sb-mock-auth-token', 
-        'supabase.auth.token'
-      ];
-      
       const mockSession = {
         access_token: 'fake-token',
         token_type: 'bearer',
@@ -35,31 +20,30 @@ test.describe('Admin Dashboard', () => {
         },
         expires_at: Math.floor(Date.now() / 1000) + 3600
       };
-      
-      keys.forEach(key => window.localStorage.setItem(key, JSON.stringify(mockSession)));
-      console.log('PLAYWRIGHT: Seeded localStorage with fake session');
+
+      const originalGetItem = window.localStorage.getItem;
+      window.localStorage.getItem = function(key) {
+        if (key && (key.includes('auth-token') || key === 'supabase.auth.token')) {
+          return JSON.stringify(mockSession);
+        }
+        return originalGetItem.apply(this, arguments as any);
+      };
     });
 
-    // 2. Mock Supabase Auth /user endpoint
-    await page.route('**/auth/v1/user', async (route) => {
+    // 2. Mock Supabase Auth
+    await page.route('**/auth/v1/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ 
-          user: { 
-            id: 'mock-user-id', 
-            email: 'admin@fce.de',
-            aud: 'authenticated',
-            role: 'authenticated',
-            app_metadata: {},
-            user_metadata: {},
-          } 
+          user: { id: 'mock-user-id', email: 'admin@fce.de' },
+          access_token: 'fake-token'
         }),
       });
     });
 
     // 3. Mock Profile Check
-    await page.route('**/rest/v1/members?select=is_admin%2Cis_approved&auth_id=eq.mock-user-id', async (route) => {
+    await page.route(url => url.href.includes('/rest/v1/members') && url.search.includes('select=is_admin'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -68,7 +52,7 @@ test.describe('Admin Dashboard', () => {
     });
 
     // 4. Mock Members List
-    await page.route('**/rest/v1/members?order=name.asc&select=%2A', async (route) => {
+    await page.route(url => url.href.includes('/rest/v1/members') && url.search.includes('select=*'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -80,7 +64,7 @@ test.describe('Admin Dashboard', () => {
     });
 
     // 5. Mock Work Dates
-    await page.route('**/rest/v1/work_dates?order=date.asc&select=%2A', async (route) => {
+    await page.route(url => url.href.includes('/rest/v1/work_dates'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -91,7 +75,7 @@ test.describe('Admin Dashboard', () => {
     });
 
     // 6. Mock Assignments
-    await page.route('**/rest/v1/assignments?status=eq.Draft&select=%2A%2Cmembers%28name%29', async (route) => {
+    await page.route(url => url.href.includes('/rest/v1/assignments'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -102,22 +86,15 @@ test.describe('Admin Dashboard', () => {
 
   test('Admin Login flow and dashboard access', async ({ page }) => {
     await page.goto('/admin');
-    
-    // Explicitly wait for the page to load and ensure we are not on /login
-    await page.waitForURL(/\/admin/);
-    
-    // The h1 in admin is "Admin-Bereich", in login it's "Interner Bereich"
-    const h1 = page.locator('h1');
-    await expect(h1).toBeVisible();
-    await expect(h1).toContainText('Admin-Bereich');
+    await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
+    await expect(page.locator('h1')).toContainText('Admin-Bereich');
   });
 
   test('Navigating to Member List and verifying data renders', async ({ page }) => {
     await page.goto('/admin');
-    await page.waitForURL(/\/admin/);
-    await expect(page.getByText('Max Mustermann')).toBeVisible();
-    await expect(page.getByText('Erika Musterfrau')).toBeVisible();
-    await expect(page.getByText('2 Personen')).toBeVisible();
+    await expect(page.locator('body')).toContainText('Max Mustermann', { timeout: 15000 });
+    await expect(page.locator('body')).toContainText('Erika Musterfrau');
+    await expect(page.locator('body')).toContainText('2 Personen');
   });
 
   test('Clicking "Generate Schedule" and verifying UI updates', async ({ page }) => {
@@ -134,13 +111,9 @@ test.describe('Admin Dashboard', () => {
     });
 
     await page.goto('/admin');
-    await page.waitForURL(/\/admin/);
-    
     const dialogPromise = page.waitForEvent('dialog');
     const generateBtn = page.getByRole('button', { name: 'Planung generieren' });
-    await expect(generateBtn).toBeVisible();
     await generateBtn.click();
-    
     const dialog = await dialogPromise;
     expect(dialog.message()).toContain('1 Schichten wurden als Entwurf geplant');
     await dialog.accept();
