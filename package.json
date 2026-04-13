@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test",
+    "test:e2e:local": "playwright test --ui"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

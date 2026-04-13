@@ -1,16 +1,37 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Admin Dashboard', () => {
-  test.beforeEach(async ({ page }) => {
-    // Mock Supabase Auth and Data
+  test.beforeEach(async ({ page, context }) => {
+    // 1. Set a fake session cookie so Supabase client thinks it's logged in
+    // Supabase client looks for a cookie or localStorage. 
+    // Mocks will handle the actual data.
+    await context.addCookies([{
+      name: 'sb-access-token',
+      value: 'fake-token',
+      domain: 'localhost',
+      path: '/',
+    }]);
+
+    // 2. Mock Supabase Auth /user endpoint
+    // Supabase returns { "user": { ... } }
     await page.route('**/auth/v1/user', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ id: 'mock-user-id', email: 'admin@fce.de' }),
+        body: JSON.stringify({ 
+          user: { 
+            id: 'mock-user-id', 
+            email: 'admin@fce.de',
+            app_metadata: {},
+            user_metadata: {},
+            aud: 'authenticated',
+            role: 'authenticated'
+          } 
+        }),
       });
     });
 
+    // 3. Mock Profile Check
     await page.route('**/rest/v1/members?select=is_admin%2Cis_approved&auth_id=eq.mock-user-id', async (route) => {
       await route.fulfill({
         status: 200,
@@ -19,6 +40,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
+    // 4. Mock Members List
     await page.route('**/rest/v1/members?order=name.asc&select=%2A', async (route) => {
       await route.fulfill({
         status: 200,
@@ -30,6 +52,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
+    // 5. Mock Work Dates
     await page.route('**/rest/v1/work_dates?order=date.asc&select=%2A', async (route) => {
       await route.fulfill({
         status: 200,
@@ -40,6 +63,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
+    // 6. Mock Assignments
     await page.route('**/rest/v1/assignments?status=eq.Draft&select=%2A%2Cmembers%28name%29', async (route) => {
       await route.fulfill({
         status: 200,
@@ -50,10 +74,12 @@ test.describe('Admin Dashboard', () => {
   });
 
   test('Admin Login flow and dashboard access', async ({ page }) => {
-    // We start at /admin, and since we mocked the user, it should stay there
     await page.goto('/admin');
+    // Ensure we don't get redirected to /login (which has "Interner Bereich")
     await expect(page).toHaveURL(/\/admin/);
-    await expect(page.locator('h1')).toContainText('Admin-Bereich');
+    const h1 = page.locator('h1');
+    await expect(h1).toBeVisible();
+    await expect(h1).toContainText('Admin-Bereich');
   });
 
   test('Navigating to Member List and verifying data renders', async ({ page }) => {
@@ -66,25 +92,28 @@ test.describe('Admin Dashboard', () => {
   test('Clicking "Generate Schedule" and verifying UI updates', async ({ page }) => {
     // Mock the generate API
     await page.route('**/api/generate', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ status: 'success', assignments_count: 1 }),
-      });
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'success', assignments_count: 1 }),
+        });
+      } else {
+        await route.continue();
+      }
     });
 
     await page.goto('/admin');
     
-    // Listen for alert
-    page.on('dialog', async dialog => {
-      expect(dialog.message()).toContain('1 Schichten wurden als Entwurf geplant');
-      await dialog.accept();
-    });
-
+    // Setup dialog listener before clicking
+    const dialogPromise = page.waitForEvent('dialog');
+    
     const generateBtn = page.getByRole('button', { name: 'Planung generieren' });
+    await expect(generateBtn).toBeVisible();
     await generateBtn.click();
     
-    // Button should show loading state during request (might be too fast to catch without slowdown)
-    // but we can verify it's still there or the alert was handled.
+    const dialog = await dialogPromise;
+    expect(dialog.message()).toContain('1 Schichten wurden als Entwurf geplant');
+    await dialog.accept();
   });
 });
