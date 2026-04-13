@@ -1,4 +1,4 @@
-name: Gatekeeper (Database CI)
+name: Database Migrations (Supabase)
 
 on:
   pull_request:
