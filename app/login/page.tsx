@@ -109,7 +109,7 @@ export default function LoginPage() {
           {/* Local Test Hint */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
             <p className="text-[10px] uppercase font-bold text-muted mb-2">Test-Zugang (Lokal):</p>
-            <p className="text-xs text-secondary font-mono">User: matze29894@gmail.com</p>
+            <p className="text-xs text-secondary font-mono">User: dev@localhost.test</p>
             <p className="text-xs text-secondary font-mono">Pass: devpassword</p>
           </div>
 
