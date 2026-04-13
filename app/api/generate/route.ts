@@ -28,7 +28,7 @@ export async function POST() {
       const needed = date.required_people || 1;
       const alreadyCount = assignments.filter(a => a.workdate_id === date.id).length;
       const rem = Math.max(0, needed - alreadyCount);
-      
+
       if (rem <= 0) return;
 
       // Fairness: Sort by current_shifts ascending

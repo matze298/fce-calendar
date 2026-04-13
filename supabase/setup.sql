@@ -133,17 +133,17 @@ ON CONFLICT (email) DO UPDATE SET is_approved = true, is_admin = true;
 
 -- 7. Seed Data: 6 months of empty WorkDates (May 2026 - Oct 2026)
 INSERT INTO work_dates (date, required_people, is_important_shift, is_weekend)
-SELECT 
+SELECT
   d::date,
-  CASE 
+  CASE
     WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN 2 -- Fri, Sat, Sun need 2 people
-    ELSE 1 
+    ELSE 1
   END,
-  CASE 
-    WHEN EXTRACT(DOW FROM d) = 6 AND random() > 0.7 THEN true 
+  CASE
+    WHEN EXTRACT(DOW FROM d) = 6 AND random() > 0.7 THEN true
     ELSE false
   END,
-  CASE 
+  CASE
     WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN true -- Fri, Sat, Sun are weekends
     ELSE false
   END

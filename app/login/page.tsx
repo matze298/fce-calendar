@@ -36,11 +36,11 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Brand Header */}
         <div className="bg-secondary p-8 flex flex-col items-center text-white">
-          <Image 
-            src="/fce-logo.png" 
-            alt="FCE Logo" 
-            width={80} 
-            height={80} 
+          <Image
+            src="/fce-logo.png"
+            alt="FCE Logo"
+            width={80}
+            height={80}
             priority
             style={{ width: '80px', height: 'auto' }}
             className="mb-4 drop-shadow-lg"
@@ -109,14 +109,14 @@ export default function LoginPage() {
           {/* Local Test Hint */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
             <p className="text-[10px] uppercase font-bold text-muted mb-2">Test-Zugang (Lokal):</p>
-            <p className="text-xs text-secondary font-mono">User: matze29894@gmail.com</p>
+            <p className="text-xs text-secondary font-mono">User: dev@localhost.test</p>
             <p className="text-xs text-secondary font-mono">Pass: devpassword</p>
           </div>
 
         </div>
       </div>
-      
-      <button 
+
+      <button
         onClick={() => router.push('/')}
         className="mt-8 text-sm text-muted hover:text-secondary font-medium transition-colors"
       >

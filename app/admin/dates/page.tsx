@@ -18,7 +18,7 @@ export default function ManageDatesPage() {
   const [workDates, setWorkDates] = useState<WorkDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  
+
   // Form State
   const [selectedDate, setSelectedDate] = useState('');
   const [requiredPeople, setRequiredPeople] = useState(1);
@@ -29,7 +29,7 @@ export default function ManageDatesPage() {
 
   const fetchDates = async () => {
     setLoading(true);
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push('/login');
@@ -65,7 +65,7 @@ export default function ManageDatesPage() {
   const handleSaveDate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDate) return;
-    
+
     setIsSubmitting(true);
     const dateObj = new Date(selectedDate);
     // 0 = Sunday, 5 = Friday, 6 = Saturday
@@ -123,7 +123,7 @@ export default function ManageDatesPage() {
 
       <main className="max-w-5xl mx-auto px-4 mt-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* Add/Edit Form */}
           <section className="lg:col-span-1">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-24">
@@ -133,8 +133,8 @@ export default function ManageDatesPage() {
               <form onSubmit={handleSaveDate} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1">DATUM</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
@@ -143,9 +143,9 @@ export default function ManageDatesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1">PERSONEN-BEDARF</label>
-                  <input 
-                    type="number" 
-                    min="1" 
+                  <input
+                    type="number"
+                    min="1"
                     max="10"
                     value={requiredPeople}
                     onChange={(e) => setRequiredPeople(parseInt(e.target.value))}
@@ -154,8 +154,8 @@ export default function ManageDatesPage() {
                   />
                 </div>
                 <div className="flex items-center gap-2 py-2">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     id="important"
                     checked={isImportant}
                     onChange={(e) => setIsImportant(e.target.checked)}
@@ -163,7 +163,7 @@ export default function ManageDatesPage() {
                   />
                   <label htmlFor="important" className="text-sm font-bold text-secondary">Wichtiger Dienst (Senior-Priorität)</label>
                 </div>
-                <button 
+                <button
                   disabled={isSubmitting}
                   className="w-full bg-primary text-secondary font-bold py-3 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-50"
                 >
@@ -176,7 +176,7 @@ export default function ManageDatesPage() {
           {/* List of active dates */}
           <section className="lg:col-span-2">
             <h2 className="text-lg font-bold text-secondary mb-6 uppercase tracking-wide flex items-center gap-2">
-              Aktive Schichttage 
+              Aktive Schichttage
               <span className="bg-secondary text-white text-[10px] px-2 py-0.5 rounded-full">{workDates.length}</span>
             </h2>
             <div className="space-y-3">
@@ -198,7 +198,7 @@ export default function ManageDatesPage() {
                     {wd.is_important_shift && (
                       <span className="bg-primary/20 text-secondary text-[8px] font-bold px-2 py-1 rounded border border-primary/50 uppercase">Wichtig</span>
                     )}
-                    <button 
+                    <button
                       onClick={() => removeDate(wd.id)}
                       className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                       title="Termin löschen"

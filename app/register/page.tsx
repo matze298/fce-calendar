@@ -85,7 +85,7 @@ export default function RegisterPage() {
             <div className="text-center space-y-4">
               <div className="text-green-600 font-bold text-lg">Registrierung erfolgreich!</div>
               <p className="text-muted text-sm">
-                Bitte prüfen Sie Ihre E-Mails, um Ihr Konto zu bestätigen (falls konfiguriert). 
+                Bitte prüfen Sie Ihre E-Mails, um Ihr Konto zu bestätigen (falls konfiguriert).
                 Sie werden in Kürze zum Login weitergeleitet.
               </p>
               <Link href="/login" className="block text-primary font-bold hover:underline">
