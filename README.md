@@ -1,6 +1,6 @@
 # FCE Schichtkalender
 
-Willkommen beim offiziellen Schichtplanungssystem des **1. FC Egenhausen 1965 e.V.**
+Willkommen beim offiziellen Schichtplanungssystem des **1. FC Egenhausen 1921 e.V.**
 
 Dieses System wurde entwickelt, um die Zuweisung von Vereinsdiensten fair, effizient und transparent zu gestalten. Es automatisiert die Planung basierend auf Verfügbarkeit, Dienstalter und Fairness-Metriken.
 
@@ -23,4 +23,4 @@ Technische Informationen zur Einrichtung, zum Datenbank-Setup und zur lokalen En
 
 ---
 
-© 2026 1. FC Egenhausen 1965 e.V.
+© 2026 1. FC Egenhausen 1921 e.V.

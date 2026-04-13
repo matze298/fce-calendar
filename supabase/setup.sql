@@ -136,7 +136,7 @@ INSERT INTO work_dates (date, required_people, is_important_shift, is_weekend)
 SELECT 
   d::date,
   CASE 
-    WHEN EXTRACT(DOW FROM d) IN (0, 6) THEN 2 
+    WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN 2 -- Fri, Sat, Sun need 2 people
     ELSE 1 
   END,
   CASE 
@@ -144,7 +144,7 @@ SELECT
     ELSE false
   END,
   CASE 
-    WHEN EXTRACT(DOW FROM d) IN (0, 6) THEN true
+    WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN true -- Fri, Sat, Sun are weekends
     ELSE false
   END
 FROM generate_series('2026-05-01'::date, '2026-10-31'::date, '1 day'::interval) d;
