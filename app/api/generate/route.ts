@@ -10,33 +10,48 @@ export async function POST() {
     // 1. Fetch data
     const { data: members } = await supabase.from('members').select('*').eq('exempt', false);
     const { data: workDates } = await supabase.from('work_dates').select('*').order('date', { ascending: true });
+    const { data: existingAssignments } = await supabase.from('assignments').select('*').eq('status', 'Published');
 
     if (!members || !workDates) {
       return NextResponse.json({ error: 'Keine Mitglieder oder Arbeitstage gefunden' }, { status: 400 });
     }
 
-    // Keep track of shifts in memory
-    const memberStats = members.map(m => ({
-      ...m,
-      current_shifts: m.historical_shifts || 0
-    }));
+    // Keep track of shifts in memory, including existing published ones
+    const memberStats = members.map(m => {
+      const publishedCount = existingAssignments?.filter(a => a.member_id === m.id).length || 0;
+      return {
+        ...m,
+        current_shifts: (m.historical_shifts || 0) + publishedCount
+      };
+    });
 
-    const assignments: any[] = [];
+    const newAssignments: any[] = [];
 
     // Helper: Assign members to a date from a filtered pool
     const assignPool = (date: any, pool: any[]) => {
       const needed = date.required_people || 1;
-      const alreadyCount = assignments.filter(a => a.workdate_id === date.id).length;
-      const rem = Math.max(0, needed - alreadyCount);
+
+      // Count both published AND newly planned drafts for this date
+      const alreadyPublished = existingAssignments?.filter(a => a.workdate_id === date.id) || [];
+      const alreadyDrafted = newAssignments.filter(a => a.workdate_id === date.id);
+
+      const totalAssigned = alreadyPublished.length + alreadyDrafted.length;
+      const rem = Math.max(0, needed - totalAssigned);
 
       if (rem <= 0) return;
 
+      // Filter pool: Remove members who are already assigned to this date (Published or Draft)
+      const availablePool = pool.filter(m =>
+        !alreadyPublished.some(a => a.member_id === m.id) &&
+        !alreadyDrafted.some(a => a.member_id === m.id)
+      );
+
       // Fairness: Sort by current_shifts ascending
-      const sortedPool = [...pool].sort((a, b) => a.current_shifts - b.current_shifts);
+      const sortedPool = [...availablePool].sort((a, b) => a.current_shifts - b.current_shifts);
       const chosen = sortedPool.slice(0, rem);
 
       chosen.forEach(m => {
-        assignments.push({
+        newAssignments.push({
           member_id: m.id,
           workdate_id: date.id,
           status: 'Draft'
@@ -63,17 +78,17 @@ export async function POST() {
     });
 
     // 2. Save to Supabase
-    if (assignments.length > 0) {
-      // Clear old drafts
-      await supabase.from('assignments').delete().eq('status', 'Draft');
-      // Insert new ones
-      const { error: insertError } = await supabase.from('assignments').insert(assignments);
+    // Clear old drafts first to avoid any conflicts with previous runs
+    await supabase.from('assignments').delete().eq('status', 'Draft');
+
+    if (newAssignments.length > 0) {
+      const { error: insertError } = await supabase.from('assignments').insert(newAssignments);
       if (insertError) throw insertError;
     }
 
     return NextResponse.json({
       status: 'success',
-      assignments_count: assignments.length
+      assignments_count: newAssignments.length
     });
 
   } catch (error: any) {
