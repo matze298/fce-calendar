@@ -215,7 +215,7 @@ export default function AdminDashboard() {
               alt="Logo" 
               width={40} 
               height={40} 
-              style={{ height: 'auto' }}
+              style={{ width: '40px', height: 'auto' }}
             />
             <h1 className="text-xl font-bold">Admin-Bereich</h1>
           </div>
