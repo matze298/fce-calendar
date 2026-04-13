@@ -131,20 +131,30 @@ INSERT INTO members (name, email, is_approved, is_admin)
 VALUES ('Admin', 'dev@localhost.test', true, true)
 ON CONFLICT (email) DO UPDATE SET is_approved = true, is_admin = true;
 
--- 7. Seed Data: 6 months of empty WorkDates (May 2026 - Oct 2026)
+-- 7. Seed Data: 6 months of WorkDates (May 2026 - Oct 2026)
+-- Logic: Fri, Sat, Sun always open.
+-- Tue, Wed open every 3 weeks (starting May 5th, 2026).
 INSERT INTO work_dates (date, required_people, is_important_shift, is_weekend)
 SELECT
   d::date,
   CASE
-    WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN 2 -- Fri, Sat, Sun need 2 people
-    ELSE 1
+    WHEN EXTRACT(DOW FROM d) IN (0, 6) THEN 2 -- Sat, Sun need 2 people
+    ELSE 1 -- Fri, Tue, Wed need 1 person
   END,
   CASE
-    WHEN EXTRACT(DOW FROM d) = 6 AND random() > 0.7 THEN true
+    WHEN EXTRACT(DOW FROM d) = 6 AND random() > 0.8 THEN true
     ELSE false
   END,
   CASE
-    WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN true -- Fri, Sat, Sun are weekends
+    WHEN EXTRACT(DOW FROM d) IN (0, 5, 6) THEN true
     ELSE false
   END
-FROM generate_series('2026-05-01'::date, '2026-10-31'::date, '1 day'::interval) d;
+FROM generate_series('2026-05-01'::date, '2026-10-31'::date, '1 day'::interval) d
+WHERE
+  EXTRACT(DOW FROM d) IN (0, 5, 6) -- Fri (5), Sat (6), Sun (0)
+  OR (
+    -- Tuesday (2) or Wednesday (3) every 3 weeks (21 days)
+    -- Starting from 2026-05-05 (Tuesday) and 2026-05-06 (Wednesday)
+    EXTRACT(DOW FROM d) IN (2, 3)
+    AND ( (d::date - '2026-05-05'::date) % 21 < 2 )
+  );
