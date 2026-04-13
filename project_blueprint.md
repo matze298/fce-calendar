@@ -32,3 +32,14 @@
 * `supabase start` for local Docker DB.
 * `vercel dev` for local frontend/backend testing.
 * `seed.sql` with fake club member data (e.g., "Max Mustermann").
+
+## 6. Automated Reminders (Vercel Cron Jobs)
+* **Strategy:** Use Vercel's native Cron feature to trigger a Python Serverless Function once daily at 08:00 AM CET.
+* **The Endpoint:** Create `/api/cron/send_reminders.py`.
+* **Security:** The endpoint MUST verify the `Authorization: Bearer <CRON_SECRET>` header provided by Vercel before executing any logic.
+* **Execution Logic:**
+    1. Query Supabase for all `Assignments` with `status = 'Published'` where the associated `WorkDate` is exactly 7 days away (and/or 1 day away).
+    2. Fetch the corresponding member's `email` and `telegram_chat_id`.
+    3. Use the `resend` Python SDK to fire a branded FC Egenhausen email reminder.
+    4. (Optional) Use the `requests` library to hit the Telegram Bot API `sendMessage` endpoint if the user has a chat ID.
+* **Configuration:** Add a `vercel.json` file to the project root scheduling the job using a standard cron expression (e.g., `0 7 * * *` for 8 AM CET).

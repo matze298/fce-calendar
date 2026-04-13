@@ -267,6 +267,7 @@ dependencies = [
     { name = "pytest" },
     { name = "pytest-mock" },
     { name = "python-dotenv" },
+    { name = "resend" },
     { name = "ruff" },
     { name = "supabase" },
     { name = "ty" },
@@ -278,6 +279,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-mock", specifier = ">=3.15.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "resend" },
     { name = "ruff" },
     { name = "supabase", specifier = ">=2.28.3" },
     { name = "ty" },
@@ -1021,6 +1023,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5f/a4/98b9c7c6428a668bf7e42ebb7c79d576a1c3c1e3ae2d47e674b468388871/requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517", size = 134120, upload-time = "2026-03-30T16:09:15.531Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a", size = 64947, upload-time = "2026-03-30T16:09:13.83Z" },
+]
+
+[[package]]
+name = "resend"
+version = "2.28.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e6/43/a9c4656d5cb38cd047ccc204ed2da5251ebbba0c66b20c4a74054624f65d/resend-2.28.0.tar.gz", hash = "sha256:a330f2434cec8a8f0fedde88353e2ca50f25c6636449623401244fe8fb2c9062", size = 43096, upload-time = "2026-04-13T13:43:34.583Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/40/ae65d3b80f0dde32be9f07e7578fd5d022fe28a6d99a3c3e5be3a0609a96/resend-2.28.0-py2.py3-none-any.whl", hash = "sha256:9a6ce783c04a9df5aa79970059e501a87b1b195388aee9ee513cb77d17c986c4", size = 68304, upload-time = "2026-04-13T13:43:33.481Z" },
 ]
 
 [[package]]
