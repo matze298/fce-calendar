@@ -29,6 +29,7 @@ type Assignment = {
   id: string;
   workdate_id: string;
   member_id: string;
+  status: 'Draft' | 'Published';
   members: { name: string };
 };
 
@@ -38,6 +39,8 @@ export default function AdminDashboard() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
 
@@ -79,13 +82,48 @@ export default function AdminDashboard() {
 
     const { data: assignData } = await supabase
       .from('assignments')
-      .select('*, members(name)')
-      .eq('status', 'Draft');
+      .select('*, members(name)');
 
     if (membersData) setMembers(membersData);
     if (datesData) setWorkDates(datesData);
     if (assignData) setAssignments(assignData as any);
     setLoading(false);
+  };
+
+  const savePlan = async () => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .update({ status: 'Published' })
+        .eq('status', 'Draft');
+
+      if (error) throw error;
+      alert('Plan wurde erfolgreich gespeichert.');
+      await fetchData();
+    } catch (err: any) {
+      alert('Fehler beim Speichern: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const cancelPlan = async () => {
+    if (!confirm('Möchten Sie den aktuellen Entwurf wirklich verwerfen?')) return;
+    setIsCancelling(true);
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('status', 'Draft');
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert('Fehler beim Verwerfen: ' + err.message);
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const saveMember = async (e: React.FormEvent) => {
@@ -226,25 +264,70 @@ export default function AdminDashboard() {
             >
               Termine verwalten
             </Link>
-            <button
-              className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
-              onClick={generateSchedule}
-              disabled={isGenerating}
-            >
-              {isGenerating ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin"></div>
-                  Planung läuft...
-                </>
-              ) : (
-                'Planung generieren'
-              )}
-            </button>
+            {assignments.some(a => a.status === 'Draft') ? (
+              <div className="flex items-center gap-2 bg-black/20 p-1 rounded-xl border border-white/10">
+                <button
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-red-600 transition-all disabled:opacity-50"
+                  onClick={cancelPlan}
+                  disabled={isCancelling || isSaving}
+                >
+                  {isCancelling ? 'Verwirft...' : 'Verwerfen'}
+                </button>
+                <button
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700 transition-all disabled:opacity-50"
+                  onClick={savePlan}
+                  disabled={isSaving || isCancelling}
+                >
+                  {isSaving ? 'Speichert...' : 'Speichern'}
+                </button>
+                <div className="w-px h-6 bg-white/20 mx-1"></div>
+                <button
+                  className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50"
+                  onClick={generateSchedule}
+                  disabled={isGenerating || isSaving || isCancelling}
+                >
+                  {isGenerating ? '...' : 'Neu generieren'}
+                </button>
+              </div>
+            ) : (
+              <button
+                className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
+                onClick={generateSchedule}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin"></div>
+                    Planung läuft...
+                  </>
+                ) : (
+                  'Planung generieren'
+                )}
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8 space-y-12">
+        {assignments.some(a => a.status === 'Draft') && (
+          <div className="bg-primary/20 border-2 border-primary border-dashed p-4 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-3 text-secondary">
+              <div className="bg-primary p-2 rounded-full animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </div>
+              <div>
+                <p className="font-black text-sm uppercase tracking-tight">Vorschau-Modus</p>
+                <p className="text-xs opacity-80 font-medium">Der aktuelle Plan ist noch ein Entwurf. Speichern Sie ihn, um ihn zu veröffentlichen.</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+               <button onClick={cancelPlan} className="text-xs font-bold px-3 py-1.5 hover:bg-black/5 rounded-lg transition-colors">Entwurf löschen</button>
+               <button onClick={savePlan} className="bg-secondary text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm">Jetzt speichern</button>
+            </div>
+          </div>
+        )}
+
         {pendingMembers.length > 0 && (
           <section className="bg-primary/10 p-6 rounded-2xl border-2 border-primary border-dashed">
             <h2 className="text-xl font-bold text-secondary mb-4 flex items-center gap-2">
@@ -318,9 +401,14 @@ export default function AdminDashboard() {
                   <div className="space-y-2 mt-4 pt-4 border-t border-gray-50">
                     {currentAssignments.length > 0 ? (
                       currentAssignments.map((a) => (
-                        <div key={a.id} className="flex items-center gap-2 text-sm text-secondary font-medium">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                          {a.members.name}
+                        <div key={a.id} className="flex items-center justify-between text-sm text-secondary font-medium group/assign">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full ${a.status === 'Draft' ? 'bg-primary animate-pulse' : 'bg-green-500'}`}></div>
+                            {a.members.name}
+                          </div>
+                          {a.status === 'Draft' && (
+                            <span className="text-[9px] bg-primary/20 text-secondary px-1.5 py-0.5 rounded font-bold">Draft</span>
+                          )}
                         </div>
                       ))
                     ) : (
