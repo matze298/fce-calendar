@@ -1,0 +1,58 @@
+name: Gatekeeper (CI)
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Backend Tests
+        run: |
+          PYTHONPATH=. uv run pytest tests/backend/test_fairness.py
+
+  database-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase Local (Verification)
+        run: |
+          # Initialize supabase if not already done
+          if [ ! -d "supabase" ]; then
+            supabase init
+          fi
+          
+          # Move setup.sql to migrations if it exists to verify it
+          if [ -f "supabase/setup.sql" ]; then
+            mkdir -p supabase/migrations
+            cp supabase/setup.sql supabase/migrations/0001_initial_schema.sql
+          fi
+
+          # Start supabase (includes running migrations)
+          supabase db start
+
+      - name: Verify Migration Success
+        run: |
+          # Verify the database schema matches what's expected
+          # This ensures no syntax errors in the SQL files
+          supabase db lint
