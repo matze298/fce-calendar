@@ -1,19 +1,31 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Admin Dashboard', () => {
-  test.beforeEach(async ({ page, context }) => {
-    // 1. Set a fake session cookie so Supabase client thinks it's logged in
-    // Supabase client looks for a cookie or localStorage. 
-    // Mocks will handle the actual data.
-    await context.addCookies([{
-      name: 'sb-access-token',
-      value: 'fake-token',
-      domain: 'localhost',
-      path: '/',
-    }]);
+  test.beforeEach(async ({ page }) => {
+    // 1. Inject a fake session into LocalStorage *before* the Supabase client initializes
+    // This is much more reliable than cookies for @supabase/supabase-js.
+    await page.addInitScript(() => {
+      const storageKey = 'sb-localhost-auth-token'; // Default key for dev
+      const mockSession = {
+        access_token: 'fake-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+        refresh_token: 'fake-refresh',
+        user: { 
+          id: 'mock-user-id', 
+          email: 'admin@fce.de',
+          aud: 'authenticated',
+          role: 'authenticated',
+          app_metadata: {},
+          user_metadata: {},
+          created_at: new Date().toISOString(),
+        },
+        expires_at: Math.floor(Date.now() / 1000) + 3600
+      };
+      window.localStorage.setItem(storageKey, JSON.stringify(mockSession));
+    });
 
-    // 2. Mock Supabase Auth /user endpoint
-    // Supabase returns { "user": { ... } }
+    // 2. Mock Supabase Auth /user endpoint (used by supabase.auth.getUser())
     await page.route('**/auth/v1/user', async (route) => {
       await route.fulfill({
         status: 200,
@@ -22,16 +34,16 @@ test.describe('Admin Dashboard', () => {
           user: { 
             id: 'mock-user-id', 
             email: 'admin@fce.de',
+            aud: 'authenticated',
+            role: 'authenticated',
             app_metadata: {},
             user_metadata: {},
-            aud: 'authenticated',
-            role: 'authenticated'
           } 
         }),
       });
     });
 
-    // 3. Mock Profile Check
+    // 3. Mock Profile Check (the .single() call in app/admin/page.tsx)
     await page.route('**/rest/v1/members?select=is_admin%2Cis_approved&auth_id=eq.mock-user-id', async (route) => {
       await route.fulfill({
         status: 200,
@@ -75,8 +87,10 @@ test.describe('Admin Dashboard', () => {
 
   test('Admin Login flow and dashboard access', async ({ page }) => {
     await page.goto('/admin');
-    // Ensure we don't get redirected to /login (which has "Interner Bereich")
-    await expect(page).toHaveURL(/\/admin/);
+    
+    // Explicitly wait for the page to load and not be redirected
+    await page.waitForURL(/\/admin/);
+    
     const h1 = page.locator('h1');
     await expect(h1).toBeVisible();
     await expect(h1).toContainText('Admin-Bereich');

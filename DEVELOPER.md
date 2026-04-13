@@ -50,4 +50,30 @@ Assignments occur in 3 phases:
 1. **Seniors:** Priority for "Important" shifts.
 2. **Weekends:** Assigned based on weekend availability.
 3. **Weekdays:** Distribution of remaining shifts.
-*Fairness Rule: Members with the fewest historical shifts are prioritized first.*
+## 6. Testing
+
+The project uses a two-tier testing strategy to ensure the fairness algorithm and critical UI paths remain stable.
+
+### Backend Tests (Python)
+The scheduling logic is tested using `pytest`. These tests use mocked Supabase data and do not require a live database.
+- **Run all backend tests:**
+  ```bash
+  PYTHONPATH=. uv run pytest tests/backend/
+  ```
+
+### End-to-End (E2E) Tests (Playwright)
+The UI and API integration are tested using Playwright. These tests automatically start a local development server.
+- **Run tests headlessly (CI style):**
+  ```bash
+  npm run test:e2e
+  ```
+- **Run tests in UI Mode (Local development/Debugging):**
+  ```bash
+  npm run test:e2e:local
+  ```
+- **View HTML Report:**
+  ```bash
+  npx playwright show-report
+  ```
+
+*Note: E2E tests mock the Supabase Auth and Database layers to ensure they can run reliably in any environment without actual credentials.*
