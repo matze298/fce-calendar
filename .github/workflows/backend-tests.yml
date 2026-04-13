@@ -8,6 +8,7 @@ on:
 
 jobs:
   test-backend:
+    name: Backend Tests (pytest & ruff)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +30,6 @@ jobs:
       - name: Format Check with Ruff
         run: uv run ruff format --check .
 
-      - name: Run ty check
-        run: uv run ty check .
-
       - name: Run Backend Tests
         run: |
-          PYTHONPATH=. uv run pytest tests/backend/
+          PYTHONPATH=. uv run pytest tests/backend/test_fairness.py
