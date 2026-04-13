@@ -42,6 +42,7 @@ export default function AdminDashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [addingToDate, setAddingToDate] = useState<string | null>(null);
   const router = useRouter();
 
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -88,6 +89,40 @@ export default function AdminDashboard() {
     if (datesData) setWorkDates(datesData);
     if (assignData) setAssignments(assignData as any);
     setLoading(false);
+  };
+
+  const addAssignment = async (workdateId: string, memberId: string) => {
+    if (!memberId) return;
+    const hasDrafts = assignments.some(a => a.status === 'Draft');
+    const { error } = await supabase
+      .from('assignments')
+      .insert({
+        workdate_id: workdateId,
+        member_id: memberId,
+        status: hasDrafts ? 'Draft' : 'Published'
+      });
+
+    if (error) {
+      if (error.code === '23505') {
+        alert('Dieses Mitglied ist an diesem Tag bereits eingeteilt.');
+      } else {
+        alert('Fehler beim Zuweisen: ' + error.message);
+      }
+    } else {
+      setAddingToDate(null);
+      fetchData();
+    }
+  };
+
+  const removeAssignment = async (id: string) => {
+    if (!confirm('Zuweisung wirklich löschen?')) return;
+    const { error } = await supabase
+      .from('assignments')
+      .delete()
+      .eq('id', id);
+
+    if (error) alert(error.message);
+    else fetchData();
   };
 
   const savePlan = async () => {
@@ -384,12 +419,39 @@ export default function AdminDashboard() {
                         month: '2-digit'
                       })}
                     </span>
-                    {wd.is_important_shift && (
-                      <span className="bg-primary text-secondary text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
-                        Wichtig
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {wd.is_important_shift && (
+                        <span className="bg-primary text-secondary text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
+                          Wichtig
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setAddingToDate(addingToDate === wd.id ? null : wd.id)}
+                        className={`p-1 rounded-md transition-colors ${addingToDate === wd.id ? 'bg-secondary text-white' : 'text-secondary hover:bg-gray-100'}`}
+                        title="Mitglied manuell hinzufügen"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                      </button>
+                    </div>
                   </div>
+
+                  {addingToDate === wd.id && (
+                    <div className="mb-4 p-2 bg-gray-50 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-1">
+                      <select
+                        onChange={(e) => addAssignment(wd.id, e.target.value)}
+                        className="w-full text-xs p-1.5 border rounded bg-white outline-none focus:ring-1 focus:ring-primary"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Mitglied auswählen...</option>
+                        {members
+                          .filter(m => !currentAssignments.some(a => a.member_id === m.id))
+                          .map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  )}
 
                   <div className="text-muted text-xs mb-4 flex items-center justify-between">
                     <span>Bedarf: {wd.required_people} {wd.required_people === 1 ? 'Person' : 'Personen'}</span>
@@ -406,9 +468,18 @@ export default function AdminDashboard() {
                             <div className={`w-1.5 h-1.5 rounded-full ${a.status === 'Draft' ? 'bg-primary animate-pulse' : 'bg-green-500'}`}></div>
                             {a.members.name}
                           </div>
-                          {a.status === 'Draft' && (
-                            <span className="text-[9px] bg-primary/20 text-secondary px-1.5 py-0.5 rounded font-bold">Draft</span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {a.status === 'Draft' && (
+                              <span className="text-[9px] bg-primary/20 text-secondary px-1.5 py-0.5 rounded font-bold">Draft</span>
+                            )}
+                            <button
+                              onClick={() => removeAssignment(a.id)}
+                              className="opacity-0 group-hover/assign:opacity-100 p-1 text-gray-300 hover:text-red-500 transition-all"
+                              title="Zuweisung entfernen"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (

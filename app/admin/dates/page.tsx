@@ -128,7 +128,7 @@ export default function ManageDatesPage() {
           <section className="lg:col-span-1">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-24">
               <h2 className="text-lg font-bold text-secondary mb-4 uppercase tracking-wide border-b-2 border-primary pb-2">
-                Termin hinzufügen
+                {workDates.some(d => d.date === selectedDate) ? 'Termin bearbeiten' : 'Termin hinzufügen'}
               </h2>
               <form onSubmit={handleSaveDate} className="space-y-4">
                 <div>
@@ -163,12 +163,27 @@ export default function ManageDatesPage() {
                   />
                   <label htmlFor="important" className="text-sm font-bold text-secondary">Wichtiger Dienst (Senior-Priorität)</label>
                 </div>
-                <button
-                  disabled={isSubmitting}
-                  className="w-full bg-primary text-secondary font-bold py-3 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Speichert...' : 'Termin festlegen'}
-                </button>
+                <div className="flex gap-2">
+                  {selectedDate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate('');
+                        setRequiredPeople(1);
+                        setIsImportant(false);
+                      }}
+                      className="flex-1 border-2 border-gray-100 text-secondary font-bold py-3 rounded-xl hover:bg-gray-50 transition-all"
+                    >
+                      Reset
+                    </button>
+                  )}
+                  <button
+                    disabled={isSubmitting}
+                    className="flex-[2] bg-primary text-secondary font-bold py-3 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Speichert...' : workDates.some(d => d.date === selectedDate) ? 'Aktualisieren' : 'Termin festlegen'}
+                  </button>
+                </div>
               </form>
             </div>
           </section>
@@ -198,6 +213,18 @@ export default function ManageDatesPage() {
                     {wd.is_important_shift && (
                       <span className="bg-primary/20 text-secondary text-[8px] font-bold px-2 py-1 rounded border border-primary/50 uppercase">Wichtig</span>
                     )}
+                    <button
+                      onClick={() => {
+                        setSelectedDate(wd.date);
+                        setRequiredPeople(wd.required_people);
+                        setIsImportant(wd.is_important_shift);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="p-2 text-gray-300 hover:text-secondary hover:bg-gray-50 rounded-lg transition-all"
+                      title="Termin bearbeiten"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    </button>
                     <button
                       onClick={() => removeDate(wd.id)}
                       className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
