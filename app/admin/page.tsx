@@ -210,7 +210,13 @@ export default function AdminDashboard() {
       <header className="bg-secondary text-white py-6 px-4 shadow-md sticky top-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/fce-logo.png" alt="Logo" width={40} height={40} />
+            <Image 
+              src="/fce-logo.png" 
+              alt="Logo" 
+              width={40} 
+              height={40} 
+              style={{ width: '40px', height: 'auto' }}
+            />
             <h1 className="text-xl font-bold">Admin-Bereich</h1>
           </div>
           <div className="flex items-center gap-2">
