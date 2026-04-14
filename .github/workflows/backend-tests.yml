@@ -32,4 +32,4 @@ jobs:
 
       - name: Run Backend Tests
         run: |
-          PYTHONPATH=. uv run pytest tests/backend/test_fairness.py
+          PYTHONPATH=. uv run pytest tests/
