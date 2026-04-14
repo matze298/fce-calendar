@@ -68,7 +68,26 @@ Assignments occur in 3 phases:
 1. **Seniors:** Priority for "Important" shifts.
 2. **Weekends:** Assigned based on weekend availability.
 3. **Weekdays:** Distribution of remaining shifts.
-## 6. Testing
+
+## 6. Automated Reminders (Cron Jobs)
+The system sends automated email reminders for shifts happening in exactly 7 days.
+
+### Environment Setup
+Add the following to your `.env.local`:
+- `CRON_SECRET`: A random string (e.g., `super-secret-123`). In production, Vercel provides this automatically.
+- `RESEND_API_KEY`: Your API key from [Resend](https://resend.com).
+- `DEVELOPMENT_EMAIL_OVERRIDE` (Optional): Set this to your own email address to redirect **all** reminder emails to yourself during testing, regardless of the member's email in the database.
+
+### Local Testing
+To trigger the reminder script manually without waiting for the schedule:
+1. Start the dev server: `npx vercel dev`
+2. Use `curl` to hit the endpoint with the required authorization:
+   ```bash
+   curl -H "Authorization: Bearer your-cron-secret" http://localhost:3000/api/cron/send_reminders
+   ```
+   *(Replace `your-cron-secret` with the value from your `.env.local`)*.
+
+## 7. Testing
 
 The project uses a two-tier testing strategy to ensure the fairness algorithm and critical UI paths remain stable.
 

@@ -14,5 +14,5 @@ ignore = [
 
 # Use google pydocstyle convention for docstring style
 # Ignore assertions in test files
-per-file-ignores = { "tests/**" = ["S101", "PLR2004"]}
+per-file-ignores = { "tests/**" = ["S101", "PLR2004", "SLF001"]}
 pydocstyle.convention = "google"
