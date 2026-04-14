@@ -106,7 +106,7 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
         html_content = html_content.replace("{{formatted_date}}", formatted_date)
 
         params = {
-            "from": "FCE Kalender <onboarding@resend.dev>",
+            "from": "FCE Kalender <info@fcegenhausen.de>",
             "to": to_email,
             "subject": f"Erinnerung: Dein Einsatz am {formatted_date}",
             "html": html_content,
