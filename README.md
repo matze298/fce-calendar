@@ -21,6 +21,10 @@ Technische Informationen zur Einrichtung, zum Datenbank-Setup und zur lokalen En
 
 👉 **[DEVELOPER.md](./DEVELOPER.md)**
 
+## 🏗️ Architektur
+![Architektur](./architecture.png)
+
+
 ---
 
 © 2026 1. FC Egenhausen 1921 e.V.
