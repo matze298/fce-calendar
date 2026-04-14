@@ -15,7 +15,7 @@ from supabase import Client, create_client
 load_dotenv(".env.local")
 
 
-def get_supabase_client() -> Client:
+def _get_supabase_client() -> Client:
     """Initializes and returns a Supabase client."""
     url: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
     key: str = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
@@ -49,7 +49,7 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             return
 
         try:
-            supabase = get_supabase_client()
+            supabase = _get_supabase_client()
             resend.api_key = os.getenv("RESEND_API_KEY")
 
             # 2. Execution Logic: Target date is exactly 7 days from now

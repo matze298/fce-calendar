@@ -1,8 +1,10 @@
+// Tests for the Admin dasbhoard using Playwright.
+
 import { test, expect } from '@playwright/test';
 
 test.describe('Admin Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    // 1. Inject a fake session into LocalStorage
+    // GIVEN a mocked Supabase session injected into localStorage before the page loads
     await page.addInitScript(() => {
       const mockSession = {
         access_token: 'fake-token',
@@ -22,7 +24,7 @@ test.describe('Admin Dashboard', () => {
       };
 
       const originalGetItem = window.localStorage.getItem;
-      window.localStorage.getItem = function(key) {
+      window.localStorage.getItem = function (key) {
         if (key && (key.includes('auth-token') || key === 'supabase.auth.token')) {
           return JSON.stringify(mockSession);
         }
@@ -30,7 +32,7 @@ test.describe('Admin Dashboard', () => {
       };
     });
 
-    // 2. Mock Supabase Auth
+    // GIVEN a mocked Supabase Auth response
     await page.route('**/auth/v1/**', async (route) => {
       await route.fulfill({
         status: 200,
@@ -42,7 +44,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
-    // 3. Mock Profile Check
+    // GIVEN a mocked profile check
     await page.route(url => url.href.includes('/rest/v1/members') && url.search.includes('select=is_admin'), async (route) => {
       await route.fulfill({
         status: 200,
@@ -51,7 +53,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
-    // 4. Mock Members List
+    // GIVEN a moked members list
     await page.route(url => url.href.includes('/rest/v1/members') && url.search.includes('select=*'), async (route) => {
       await route.fulfill({
         status: 200,
@@ -63,7 +65,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
-    // 5. Mock Work Dates
+    // GIVEN mocked work dates
     await page.route(url => url.href.includes('/rest/v1/work_dates'), async (route) => {
       await route.fulfill({
         status: 200,
@@ -74,7 +76,7 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
-    // 6. Mock Assignments
+    // GIVEN mocked assignments
     await page.route(url => url.href.includes('/rest/v1/assignments'), async (route) => {
       await route.fulfill({
         status: 200,
@@ -84,19 +86,25 @@ test.describe('Admin Dashboard', () => {
     });
   });
 
+
+  // WHEN accessing the admin page
   test('Admin Login flow and dashboard access', async ({ page }) => {
     await page.goto('/admin');
+    // THEN the page is loaded with the correct URL and contains "Admin-Bereich"
     await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
     await expect(page.locator('h1')).toContainText('Admin-Bereich');
   });
 
+  // WHEN accessing the admin page
   test('Navigating to Member List and verifying data renders', async ({ page }) => {
     await page.goto('/admin');
+    // THEN the members are contained
     await expect(page.locator('body')).toContainText('Max Mustermann', { timeout: 15000 });
     await expect(page.locator('body')).toContainText('Erika Musterfrau');
     await expect(page.locator('body')).toContainText('2 Personen');
   });
 
+  // WHEN clicking Generate Schedule
   test('Clicking "Generate Schedule" and verifying UI updates', async ({ page }) => {
     await page.route('**/api/generate', async (route) => {
       if (route.request().method() === 'POST') {
@@ -114,8 +122,21 @@ test.describe('Admin Dashboard', () => {
     const dialogPromise = page.waitForEvent('dialog');
     const generateBtn = page.getByRole('button', { name: 'Planung generieren' });
     await generateBtn.click();
+
+    // THEN the success dialog is shown with the correct message
     const dialog = await dialogPromise;
     expect(dialog.message()).toContain('1 Schichten wurden als Entwurf geplant');
     await dialog.accept();
   });
+
+  // WHEN accessing the dates page
+  test('Navigating to Dates management and verifying data', async ({ page }) => {
+    await page.goto('/admin');
+
+    // THEN
+    await page.getByRole('link', { name: 'Termine verwalten' }).click();
+    await expect(page).toHaveURL(/\/admin\/dates/);
+    await expect(page.locator('body')).toContainText('2024-05-01');
+    await expect(page.locator('body')).toContainText('Wichtig');
+  })
 });
