@@ -11,9 +11,6 @@ Dieses System wurde entwickelt, um die Zuweisung von Vereinsdiensten fair, effiz
 - **Sicher & DSGVO-Konform:** Vollständige Kontrolle über Datenlöschungen ("Recht auf Vergessenwerden") und geschützte Datenbereiche.
 - **Mobile First:** Optimiert für die Nutzung auf Smartphones direkt am Spielfeldrand oder im Vereinsheim.
 
-## Architektur
-![Architektur](./architecture.png)
-
 ## 👥 Für Mitglieder
 Um Ihren Dienstplan einzusehen oder Ihre Verfügbarkeit zu pflegen, loggen Sie sich bitte über den **Mitglieder-Login** ein. Neue Konten müssen von einem Administrator freigeschaltet werden.
 
@@ -23,6 +20,10 @@ Um Ihren Dienstplan einzusehen oder Ihre Verfügbarkeit zu pflegen, loggen Sie s
 Technische Informationen zur Einrichtung, zum Datenbank-Setup und zur lokalen Entwicklung finden Sie in der separaten Dokumentation:
 
 👉 **[DEVELOPER.md](./DEVELOPER.md)**
+
+## 🏗️ Architektur
+![Architektur](./architecture.png)
+
 
 ---
 
