@@ -85,7 +85,7 @@ class TestHandler:
 
             mock_resend.assert_called_with(
                 {
-                    "from": "FCE Kalender <onboarding@resend.dev>",
+                    "from": "FCE Kalender <info@fcegenhausen.de>",
                     "to": "test@example.com",
                     "subject": "Erinnerung: Dein Einsatz am "
                     f"{datetime.strptime(target_date, '%Y-%m-%d').replace(tzinfo=UTC).strftime('%d.%m.%Y')}",
