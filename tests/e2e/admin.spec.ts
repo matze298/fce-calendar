@@ -133,10 +133,10 @@ test.describe('Admin Dashboard', () => {
   test('Navigating to Dates management and verifying data', async ({ page }) => {
     await page.goto('/admin');
 
-    // THEN
+    // THEN the page contains the expected date
     await page.getByRole('link', { name: 'Termine verwalten' }).click();
     await expect(page).toHaveURL(/\/admin\/dates/);
-    await expect(page.locator('body')).toContainText('2024-05-01');
+    await expect(page.locator('body')).toContainText('Mai 2024');
     await expect(page.locator('body')).toContainText('Wichtig');
   })
 });
