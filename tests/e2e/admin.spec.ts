@@ -204,4 +204,54 @@ test.describe('Admin Dashboard', () => {
     await expect(page.locator('input[placeholder="Vorname Nachname"]')).toHaveValue('');
     await expect(page.locator('input[placeholder="email@fce.de"]')).toHaveValue('');
   });
+
+  // WHEN clicking Reset Plan
+  test('Clicking "Reset Plan" and verifying UI updates', async ({ page }) => {
+    // GIVEN mocked assignments so the button is enabled
+    await page.route(url => url.href.includes('/rest/v1/assignments'), async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            { id: '1', workdate_id: '101', member_id: '1', status: 'Published', members: { name: 'Max Mustermann' } }
+          ]),
+        });
+      } else if (method === 'DELETE') {
+        await route.fulfill({
+          status: 204,
+          contentType: 'application/json',
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.goto('/admin');
+
+    // THEN the reset button should be visible and enabled
+    const resetBtn = page.getByRole('button', { name: 'Dienstplan vollständig zurücksetzen' });
+    await expect(resetBtn).toBeVisible();
+    await expect(resetBtn).toBeEnabled();
+
+    // Set up dialog handling for both the confirmation AND the success alert
+    let dialogCount = 0;
+    page.on('dialog', async dialog => {
+      dialogCount++;
+      if (dialogCount === 1) {
+        expect(dialog.message()).toContain('ACHTUNG');
+        await dialog.accept();
+      } else if (dialogCount === 2) {
+        expect(dialog.message()).toContain('erfolgreich zurückgesetzt');
+        await dialog.accept();
+      }
+    });
+
+    // WHEN clicking Reset Plan
+    await resetBtn.click();
+
+    // THEN both dialogs should have been handled
+    await expect.poll(() => dialogCount).toBe(2);
+  });
 });

@@ -41,6 +41,7 @@ export default function AdminDashboard() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
   const router = useRouter();
@@ -156,6 +157,27 @@ export default function AdminDashboard() {
       alert('Fehler beim Verwerfen: ' + err.message);
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const resetPlan = async () => {
+    if (!confirm('🚨 ACHTUNG: Dies löscht ALLE Zuweisungen (Drafts UND veröffentlichte Pläne)! Diese Aktion kann nicht rückgängig gemacht werden. Möchten Sie wirklich alles löschen?')) return;
+
+    setIsResetting(true);
+    try {
+      // Supabase requires a filter for delete. We target all assignments by using a filter that matches all.
+      const { error } = await supabase
+        .from('assignments')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) throw error;
+      alert('Der gesamte Dienstplan wurde erfolgreich zurückgesetzt.');
+      await fetchData();
+    } catch (err: any) {
+      alert('Fehler beim Zurücksetzen: ' + err.message);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -415,6 +437,35 @@ export default function AdminDashboard() {
                 <p className="text-muted italic">Keine Arbeitstage gefunden. Führen Sie das Setup-Script in Supabase aus.</p>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Danger Zone */}
+        <section className="pt-8 border-t border-red-100">
+          <div className="bg-red-50/50 rounded-2xl p-6 border border-red-100 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="bg-red-100 p-3 rounded-full text-red-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-red-900">Gefahrenbereich</h3>
+                <p className="text-sm text-red-700/80 font-medium">Löschen Sie alle aktuellen Zuweisungen, um die Planung von Grund auf neu zu beginnen.</p>
+              </div>
+            </div>
+            <button
+              onClick={resetPlan}
+              disabled={isResetting || assignments.length === 0}
+              className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition-all shadow-sm disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isResetting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Wird zurückgesetzt...
+                </>
+              ) : (
+                'Dienstplan vollständig zurücksetzen'
+              )}
+            </button>
           </div>
         </section>
       </main>
