@@ -4,6 +4,10 @@ Willkommen beim offiziellen Schichtplanungssystem des **1. FC Egenhausen 1921 e.
 
 Dieses System wurde entwickelt, um die Zuweisung von Vereinsdiensten fair, effizient und transparent zu gestalten. Es automatisiert die Planung basierend auf Verfügbarkeit, Dienstalter und Fairness-Metriken.
 
+[![Database Migrations (Supabase)](https://github.com/matze298/fce-calendar/actions/workflows/database-migrations.yml/badge.svg)](https://github.com/matze298/fce-calendar/actions/workflows/database-migrations.yml)
+[![E2E Tests (Playwright)](https://github.com/matze298/fce-calendar/actions/workflows/e2e-tests.yml/badge.svg)](https://github.com/matze298/fce-calendar/actions/workflows/e2e-tests.yml)
+[![Python Backend Tests](https://github.com/matze298/fce-calendar/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/matze298/fce-calendar/actions/workflows/backend-tests.yml)
+
 ## 🚀 Funktionen
 - **Automatisierte Planung:** Generierung von Schichtentwürfen per Mausklick unter Berücksichtigung von Fairness-Regeln (Mitglieder mit wenig Diensten kommen zuerst).
 - **Drei-Phasen-Logik:** Gezielte Zuweisung von Senioren für wichtige Schichten und Abstimmung der Verfügbarkeiten an Wochenenden und Wochentagen.
@@ -23,7 +27,6 @@ Technische Informationen zur Einrichtung, zum Datenbank-Setup und zur lokalen En
 
 ## 🏗️ Architektur
 ![Architektur](./architecture.png)
-
 
 ---
 
