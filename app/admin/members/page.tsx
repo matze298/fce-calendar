@@ -24,7 +24,15 @@ export default function ManageMembersPage() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const router = useRouter();
+
+  // New Member Form State
+  const [newMember, setNewMember] = useState({
+    name: '',
+    email: '',
+    seniority_level: 'Standard',
+    historical_shifts: 0
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -69,6 +77,33 @@ export default function ManageMembersPage() {
 
     if (error) alert(error.message);
     else fetchData();
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMember.email || !newMember.name) return;
+
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from('members')
+      .insert({
+        ...newMember,
+        is_approved: true, // Admin-added members are auto-approved
+        is_admin: false
+      });
+
+    if (error) {
+      alert('Fehler beim Hinzufügen: ' + error.message);
+    } else {
+      await fetchData();
+      setNewMember({
+        name: '',
+        email: '',
+        seniority_level: 'Standard',
+        historical_shifts: 0
+      });
+    }
+    setIsSubmitting(false);
   };
 
   const saveMember = async (e: React.FormEvent) => {
@@ -134,83 +169,149 @@ export default function ManageMembersPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8 space-y-12">
-        {pendingMembers.length > 0 && (
-          <section className="bg-primary/10 p-6 rounded-2xl border-2 border-primary border-dashed">
-            <h2 className="text-xl font-bold text-secondary mb-4 flex items-center gap-2">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-secondary"></span>
-              </span>
-              Ausstehende Freischaltungen
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {pendingMembers.map((m) => (
-                <div key={m.id} className="bg-white p-4 rounded-xl shadow-sm flex items-center justify-between border border-primary/30">
-                  <div>
-                    <p className="font-bold text-secondary">{m.email}</p>
-                    <p className="text-[10px] text-muted">Registriert am: {new Date(m.created_at).toLocaleDateString()}</p>
-                  </div>
-                  <button
-                    onClick={() => approveMember(m.id)}
-                    className="bg-secondary text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-black transition-colors"
-                  >
-                    Freischalten
-                  </button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Add Member Form */}
+          <section className="lg:col-span-1">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-24">
+              <h2 className="text-lg font-bold text-secondary mb-4 uppercase tracking-wide border-b-2 border-primary pb-2">
+                Mitglied hinzufügen
+              </h2>
+              <form onSubmit={handleAddMember} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1 uppercase">Name</label>
+                  <input
+                    type="text"
+                    value={newMember.name}
+                    onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                    placeholder="Vorname Nachname"
+                    required
+                  />
                 </div>
-              ))}
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1 uppercase">Email</label>
+                  <input
+                    type="email"
+                    value={newMember.email}
+                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                    placeholder="email@fce.de"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1 uppercase">Status</label>
+                  <select
+                    value={newMember.seniority_level}
+                    onChange={(e) => setNewMember({ ...newMember, seniority_level: e.target.value })}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="Senior">Senior</option>
+                    <option value="Standard">Standard</option>
+                    <option value="Junior">Junior</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1 uppercase">Bisherige Schichten</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newMember.historical_shifts}
+                    onChange={(e) => setNewMember({ ...newMember, historical_shifts: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <button
+                  disabled={isSubmitting}
+                  className="w-full bg-primary text-secondary font-bold py-3 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-50 mt-2"
+                >
+                  {isSubmitting ? 'Wird hinzugefügt...' : 'Mitglied anlegen'}
+                </button>
+              </form>
             </div>
           </section>
-        )}
 
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
-              Alle Mitglieder
-            </h2>
-            <span className="text-sm font-medium text-muted">{approvedMembers.length} Personen</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {approvedMembers.length > 0 ? approvedMembers.map((m) => (
-              <div key={m.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
-                <div>
-                  <h3 className="font-bold text-secondary">{m.name}</h3>
-                  <p className="text-xs text-muted">{m.email}</p>
+          {/* Pending & Approved Members List */}
+          <div className="lg:col-span-2 space-y-12">
+            {pendingMembers.length > 0 && (
+              <section className="bg-primary/10 p-6 rounded-2xl border-2 border-primary border-dashed">
+                <h2 className="text-xl font-bold text-secondary mb-4 flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-secondary"></span>
+                  </span>
+                  Ausstehende Freischaltungen
+                </h2>
+                <div className="grid grid-cols-1 gap-4">
+                  {pendingMembers.map((m) => (
+                    <div key={m.id} className="bg-white p-4 rounded-xl shadow-sm flex items-center justify-between border border-primary/30">
+                      <div>
+                        <p className="font-bold text-secondary">{m.email}</p>
+                        <p className="text-[10px] text-muted">Registriert am: {new Date(m.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <button
+                        onClick={() => approveMember(m.id)}
+                        className="bg-secondary text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-black transition-colors"
+                      >
+                        Freischalten
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2 text-muted">
-                  <div className="text-right">
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
-                      m.seniority_level === 'Senior' ? 'bg-secondary text-white' : 'bg-gray-100 text-muted'
-                    }`}>
-                      {m.seniority_level}
-                    </span>
-                    <p className="text-[10px] text-muted mt-2">Dienste: {m.historical_shifts}</p>
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => setEditingMember(m)}
-                      className="p-2 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
-                      title="Mitglied bearbeiten"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                    </button>
-                    <button
-                      onClick={() => deleteMember(m.id, m.name)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Mitglied gemäß DSGVO löschen"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="col-span-full py-12 text-center bg-white rounded-xl border-2 border-dashed border-gray-100">
-                <p className="text-muted italic">Keine Mitglieder gefunden. Prüfen Sie Ihre Datenbankverbindung.</p>
-              </div>
+              </section>
             )}
+
+            <section>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3 uppercase tracking-wide">
+                  Alle Mitglieder
+                </h2>
+                <span className="text-sm font-medium text-muted">{approvedMembers.length} Personen</span>
+              </div>
+
+              <div className="space-y-3">
+                {approvedMembers.length > 0 ? approvedMembers.map((m) => (
+                  <div key={m.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
+                    <div>
+                      <h3 className="font-bold text-secondary">{m.name}</h3>
+                      <p className="text-xs text-muted">{m.email}</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted">
+                      <div className="text-right">
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                          m.seniority_level === 'Senior' ? 'bg-secondary text-white' : 'bg-gray-100 text-muted'
+                        }`}>
+                          {m.seniority_level}
+                        </span>
+                        <p className="text-[10px] text-muted mt-2">Dienste: {m.historical_shifts}</p>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => setEditingMember(m)}
+                          className="p-2 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
+                          title="Mitglied bearbeiten"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button
+                          onClick={() => deleteMember(m.id, m.name)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Mitglied gemäß DSGVO löschen"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="py-12 text-center bg-white rounded-xl border-2 border-dashed border-gray-100">
+                    <p className="text-muted italic">Keine Mitglieder gefunden. Prüfen Sie Ihre Datenbankverbindung.</p>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
-        </section>
+        </div>
       </main>
 
       {/* Edit Member Modal */}

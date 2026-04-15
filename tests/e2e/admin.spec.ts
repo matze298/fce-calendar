@@ -49,7 +49,7 @@ test.describe('Admin Dashboard', () => {
       const method = route.request().method();
       const urlString = route.request().url();
 
-      if (['PATCH', 'PUT'].includes(method)) {
+      if (['PATCH', 'PUT', 'POST'].includes(method)) {
         await route.fulfill({
           status: 204,
           contentType: 'application/json',
@@ -187,5 +187,21 @@ test.describe('Admin Dashboard', () => {
     // THEN the member should be processed (fetchData called again)
     // (In a real mock we could change the response, but checking the click works is enough for E2E logic)
     await expect(page.locator('button:has-text("Freischalten")')).toBeVisible(); // Still there because mock doesn't change
+  });
+
+  // WHEN adding a new member on the members page
+  test('Adding a new member', async ({ page }) => {
+    await page.goto('/admin/members');
+
+    // GIVEN we fill out the "Mitglied hinzufügen" form
+    await page.fill('input[placeholder="Vorname Nachname"]', 'New Admin Member');
+    await page.fill('input[placeholder="email@fce.de"]', 'new-admin@fce.de');
+
+    // WHEN we click "Mitglied anlegen"
+    await page.click('button:has-text("Mitglied anlegen")');
+
+    // THEN the form should be reset (fetchData called again)
+    await expect(page.locator('input[placeholder="Vorname Nachname"]')).toHaveValue('');
+    await expect(page.locator('input[placeholder="email@fce.de"]')).toHaveValue('');
   });
 });
