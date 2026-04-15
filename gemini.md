@@ -2,8 +2,10 @@
 
 Welcome to the **FCE Schichtkalender** project. This document serves as a high-level guide for AI-assisted development.
 
+**🚀 Live Documentation Site:** `https://<your-username>.github.io/fce-calendar/` (Requires GitHub Pages activation in settings)
+
 ## 📖 Core Reference
-The source of truth for the project's logic and architecture is the **[Project Blueprint](./project_blueprint.md)**. Always refer to it before implementing new features or modifying the scheduling algorithm.
+The source of truth for the project's logic and architecture is the **[Project Blueprint](./docs/project_blueprint.md)**. Always refer to it before implementing new features or modifying the scheduling algorithm.
 
 ## 📂 High-Level Repository Structure
 
@@ -13,10 +15,10 @@ The source of truth for the project's logic and architecture is the **[Project B
 - **`/tests`**:
     - **`/tests/backend`**: Python unit tests for the scheduling logic using `pytest`.
     - **`/tests/e2e`**: Playwright tests for critical user journeys and UI stability.
-- **`/docs`**: Extended documentation, blueprints, and CI/CD specifications.
+- **`/docs`**: Extended documentation, blueprints, and implementation guides.
 
 ## 🧪 Testing Standards
-For the overall testing standards and framework, refer to the **[CI/CD & Testing Blueprint](./ci_cd_blueprint.md)**.
+For the overall testing standards and framework, refer to the **[CI/CD & Testing Blueprint](./docs/ci_cd_blueprint.md)**.
 
 To ensure maintainability and clarity, all tests must follow the **GIVEN, WHEN, THEN** schema. Every test file should utilize comments to explicitly separate these phases.
 
@@ -38,3 +40,6 @@ def test_fairness_distribution():
     # THEN The member with zero shifts should be prioritized for assignment
     assert result[0].member_id == member_with_zero_shifts.id
 ```
+
+## 📝 Documentation Maintenance
+Maintain the **[WEBAPP_GUIDE.md](./docs/WEBAPP_GUIDE.md)** as a concise technical overview for Python developers. Whenever adding new pages, API routes, or core frontend utilities, update the tables in that guide to reflect the changes.
