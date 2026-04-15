@@ -33,17 +33,29 @@ type Assignment = {
   members: { name: string };
 };
 
+type Settings = {
+  id: number;
+  cooldown_days: number;
+  last_updated: string;
+};
+
 export default function AdminDashboard() {
   const [members, setMembers] = useState<Member[]>([]);
   const [workDates, setWorkDates] = useState<WorkDate[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPlan, setIsSavingPlan] = useState(false); // Renamed for clarity
   const [isCancelling, setIsCancelling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
+
+  // New state for settings
+  const [cooldownDays, setCooldownDays] = useState<number>(21);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsId, setSettingsId] = useState<number | null>(null); // To store the ID of the settings row
+
   const router = useRouter();
 
   const fetchData = async () => {
@@ -84,9 +96,21 @@ export default function AdminDashboard() {
       .from('assignments')
       .select('*, members(name)');
 
+    // Fetch settings
+    const { data: settingsData } = await supabase
+      .from('settings')
+      .select('*')
+      .limit(1)
+      .single();
+
     if (membersData) setMembers(membersData);
     if (datesData) setWorkDates(datesData);
     if (assignData) setAssignments(assignData as any);
+    if (settingsData) {
+      setCooldownDays(settingsData.cooldown_days);
+      setSettingsId(settingsData.id);
+    }
+
     setLoading(false);
   };
 
@@ -125,7 +149,7 @@ export default function AdminDashboard() {
   };
 
   const savePlan = async () => {
-    setIsSaving(true);
+    setIsSavingPlan(true);
     try {
       const { error } = await supabase
         .from('assignments')
@@ -138,7 +162,7 @@ export default function AdminDashboard() {
     } catch (err: any) {
       alert('Fehler beim Speichern: ' + err.message);
     } finally {
-      setIsSaving(false);
+      setIsSavingPlan(false);
     }
   };
 
@@ -181,6 +205,31 @@ export default function AdminDashboard() {
     }
   };
 
+  // New function to save settings
+  const saveSettings = async () => {
+    if (settingsId === null) {
+        alert('Einstellungen konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
+        return;
+    }
+    setIsSavingSettings(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .update({ cooldown_days: cooldownDays, last_updated: new Date().toISOString() })
+        .eq('id', settingsId);
+
+      if (error) throw error;
+      alert('Einstellungen wurden erfolgreich gespeichert.');
+      // Optionally, re-fetch assignments if cooldown change should be reflected immediately
+      // await fetchData();
+    } catch (err: any) {
+      alert('Fehler beim Speichern der Einstellungen: ' + err.message);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -218,7 +267,7 @@ export default function AdminDashboard() {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background gap-4">
         <div className="text-xl font-bold animate-pulse text-secondary text-center">
-          Wird geprüft...
+          Wird geladen...
         </div>
       </div>
     );
@@ -276,22 +325,22 @@ export default function AdminDashboard() {
                 <button
                   className="bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-red-600 transition-all disabled:opacity-50"
                   onClick={cancelPlan}
-                  disabled={isCancelling || isSaving}
+                  disabled={isCancelling || isSavingPlan}
                 >
                   {isCancelling ? 'Verwirft...' : 'Verwerfen'}
                 </button>
                 <button
                   className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700 transition-all disabled:opacity-50"
                   onClick={savePlan}
-                  disabled={isSaving || isCancelling}
+                  disabled={isSavingPlan || isCancelling}
                 >
-                  {isSaving ? 'Speichert...' : 'Speichern'}
+                  {isSavingPlan ? 'Speichert...' : 'Speichern'}
                 </button>
                 <div className="w-px h-6 bg-white/20 mx-1"></div>
                 <button
                   className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50"
                   onClick={generateSchedule}
-                  disabled={isGenerating || isSaving || isCancelling}
+                  disabled={isGenerating || isSavingPlan || isCancelling}
                 >
                   {isGenerating ? '...' : 'Neu generieren'}
                 </button>
@@ -334,6 +383,52 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* New Settings Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
+              Schichtplan-Einstellungen
+            </h2>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row items-center gap-4">
+              <div className="flex-grow flex items-center gap-3">
+                <label htmlFor="cooldown-slider" className="text-sm font-medium text-secondary whitespace-nowrap">
+                  Abkühlphase (Tage):
+                </label>
+                <input
+                  id="cooldown-slider"
+                  type="range"
+                  min="0"
+                  max="60"
+                  value={cooldownDays}
+                  onChange={(e) => setCooldownDays(parseInt(e.target.value))}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                  style={{ '--value': cooldownDays } as any} // For potential custom styling if needed
+                />
+                <span className="text-lg font-bold text-secondary w-10 text-center">{cooldownDays}</span>
+              </div>
+              <button
+                onClick={saveSettings}
+                disabled={isSavingSettings}
+                className="bg-secondary text-white px-5 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSavingSettings ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Speichert...
+                  </>
+                ) : (
+                  'Speichern'
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-muted mt-2 ml-3">
+              Nach wie vielen Tagen darf ein Mitglied wieder für denselben oder einen wichtigen/Wochenend-Dienst eingeteilt werden? (0 = keine Abkühlphase)
+            </p>
+          </div>
+        </section>
 
         <section>
           <div className="flex items-center justify-between mb-6">

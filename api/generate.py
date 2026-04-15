@@ -20,6 +20,15 @@ def get_supabase_client() -> Client:
     return create_client(url, key)
 
 
+def get_scheduler_settings(supabase: Client) -> dict[str, Any]:
+    """Fetches scheduler settings from the Supabase settings table."""
+    settings_response = supabase.table("settings").select("*").limit(1).execute()
+    if settings_response.data and len(settings_response.data) > 0:
+        return cast("dict[str, Any]", settings_response.data[0])
+    # Fallback to default if no settings are found (should not happen if seeded)
+    return {"cooldown_days": 21}
+
+
 def generate_assignments(
     members: list[dict[str, Any]], work_dates: list[dict[str, Any]], cooldown_days: int = 21
 ) -> list[dict[str, Any]]:
@@ -117,8 +126,9 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801
                 self._send_error(400, "Missing members or work dates in database")
                 return
 
-            # Configuration: Cooldown period (Default 3 weeks / 21 days)
-            cooldown_days = int(os.getenv("SCHEDULING_COOLDOWN_DAYS", "21"))
+            # 2. Fetch cooldown days from the settings table
+            settings = get_scheduler_settings(supabase)
+            cooldown_days = settings.get("cooldown_days", 21)  # Default to 21 if not found
 
             assignments = generate_assignments(members, work_dates, cooldown_days=cooldown_days)
 
