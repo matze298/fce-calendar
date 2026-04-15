@@ -17,10 +17,12 @@ The source of truth for the project's logic and architecture is the **[Project B
     - **`/tests/e2e`**: Playwright tests for critical user journeys and UI stability.
 - **`/docs`**: Extended documentation, blueprints, and implementation guides.
 
-## 🧪 Testing Standards
+### Testing Standards
 For the overall testing standards and framework, refer to the **[CI/CD & Testing Blueprint](./docs/ci_cd_blueprint.md)**.
 
 To ensure maintainability and clarity, all tests must follow the **GIVEN, WHEN, THEN** schema. Every test file should utilize comments to explicitly separate these phases.
+
+**E2E Testing Note:** When running Playwright E2E tests, always use the `--reporter=list` (or `dot`) flag to prevent the HTML report from opening automatically in the browser, which can hang in headless or remote environments. Example: `npx playwright test --reporter=list`.
 
 ### Schema Requirements:
 1. **GIVEN**: Setup the initial state, mock data, and environment.
