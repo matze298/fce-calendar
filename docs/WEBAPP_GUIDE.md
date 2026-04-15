@@ -17,12 +17,13 @@ Each `page.tsx` file defines the UI for its directory's path.
 | `/admin/dates` | `app/admin/dates/page.tsx` | CRUD for work dates/shifts. |
 | `/admin/members` | `app/admin/members/page.tsx`| CRUD for club members & manual approvals. |
 
-### 🛠️ API & Server Logic (`/app/api/**/route.ts`)
-Next.js also handles backend-like routes. For Python devs, these are equivalent to FastAPI endpoints.
+### 🛠️ API & Server Logic (`/app/api/**/route.ts` & `/api/**/*.py`)
+Next.js and Vercel Serverless Functions handle backend logic. For Python devs, these are equivalent to FastAPI endpoints.
 
 | Endpoint | Implementation File | Responsibility |
 | :--- | :--- | :--- |
 | `/api/generate`| `app/api/generate/route.ts` | **Proxy Route**: Forwards requests to the Python scheduling backend (Vercel Serverless Function at `/api/generate.py`). |
+| `/api/cron/send_reminders` | `api/cron/send_reminders.py` | **Cron Job**: Automated daily email reminders for members with upcoming shifts. |
 
 ### 🌍 Shared Logic & Global Files
 - **`app/layout.tsx`**: The "base template" (like a base Jinja2 template). Contains the HTML structure, fonts, and metadata that persist across all pages.
@@ -35,6 +36,7 @@ Next.js also handles backend-like routes. For Python devs, these are equivalent 
 1. **Client Components (`'use client'`)**:
    - Files starting with `'use client'` are interactive and run in the browser.
    - They use `useState` (for local variable tracking) and `useEffect` (for triggering actions on load).
+   - **Critical Actions**: Some pages contain complex local logic. For example, `app/admin/page.tsx` includes a **Reset Plan** function that interacts directly with Supabase to clear all assignments.
 
 2. **TypeScript (TS)**:
    - Think of TS as "Python with mandatory type hints". We define `type Member = { ... }` or `interface` to ensure data structures are consistent.
