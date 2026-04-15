@@ -61,3 +61,26 @@ def test_weekend_constraints_respected() -> None:
 
     assert len(assignments) == 1
     assert assignments[0]["member_id"] == 2  # Only Member 2 is eligible for weekends
+
+
+def test_cooldown_period_respected() -> None:
+    """Verify that the 3-week cooldown period is respected."""
+    # Member with 0 historical shifts, but ALREADY has a shift in the current plan
+    # and a second member with more historical shifts.
+    members = [
+        {"id": 1, "name": "Member A", "seniority_level": "Junior", "historical_shifts": 0, "availability": "Any"},
+        {"id": 2, "name": "Member B", "seniority_level": "Junior", "historical_shifts": 10, "availability": "Any"},
+    ]
+    # Two dates, 1 week apart
+    work_dates = [
+        {"id": 101, "date": "2024-05-01", "is_important_shift": False, "is_weekend": False, "required_people": 1},
+        {"id": 102, "date": "2024-05-08", "is_important_shift": False, "is_weekend": False, "required_people": 1},
+    ]
+
+    assignments = generate_assignments(members, work_dates)
+
+    assert len(assignments) == 2
+    # First date should go to Member A (0 shifts)
+    # Second date should go to Member B (10 shifts) because Member A is in cooldown (only 7 days since last shift)
+    assert assignments[0]["member_id"] == 1
+    assert assignments[1]["member_id"] == 2

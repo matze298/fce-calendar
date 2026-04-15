@@ -21,6 +21,8 @@
 * Phase 2: Weekend availability -> Weekends.
 * Phase 3: General availability -> Remaining slots.
 * *Fairness:* Sort by `historical_shifts` (Ascending).
+* *Cooldown:* Members are ineligible for a new shift if they have an assignment within a 3-week window (21 days) of the target date. This is a "soft" constraint: if no members are available without violating cooldown, the pool reverts to all eligible members for that phase to ensure the shift is filled.
+* *Configuration:* The cooldown period is configurable via `SCHEDULING_COOLDOWN_DAYS` (default: 21).
 
 ## 4. Security & GDPR (Germany/EU Standards)
 * Strict Row Level Security (RLS) in Supabase.
