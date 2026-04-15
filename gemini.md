@@ -2,6 +2,8 @@
 
 Welcome to the **FCE Schichtkalender** project. This document serves as a high-level guide for AI-assisted development.
 
+**🚀 Live Documentation Site:** `https://<your-username>.github.io/fce-calendar/` (Requires GitHub Pages activation in settings)
+
 ## 📖 Core Reference
 The source of truth for the project's logic and architecture is the **[Project Blueprint](./docs/project_blueprint.md)**. Always refer to it before implementing new features or modifying the scheduling algorithm.
 
