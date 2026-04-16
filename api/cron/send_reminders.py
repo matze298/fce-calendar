@@ -11,6 +11,8 @@ import resend
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
+from api.models import Assignment
+
 # Load environment variables
 load_dotenv(".env.local")
 
@@ -63,16 +65,22 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
                 .execute()
             )
 
-            assignments = cast("list[dict[str, Any]]", response.data)
-            target_assignments = [a for a in assignments if a.get("work_dates", {}).get("date") == target_date]
+            if not response.data:
+                assignments: list[Assignment] = []
+            else:
+                assignments = [Assignment.from_dict(a) for a in cast("list[dict[str, Any]]", response.data)]
+
+            target_assignments = [a for a in assignments if a.work_dates and a.work_dates.date == target_date]
 
             sent_count = 0
             email_override = os.getenv("DEVELOPMENT_EMAIL_OVERRIDE")
 
             for a in target_assignments:
-                member = a.get("members", {})
-                email = email_override or member.get("email")
-                name = member.get("name")
+                if not a.members:
+                    continue
+
+                email = email_override or a.members.email
+                name = a.members.name
 
                 if email and name:
                     self._send_reminder_email(email, name, target_date)

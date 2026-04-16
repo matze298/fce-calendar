@@ -18,6 +18,8 @@ class TestHandler:
         database_return = MagicMock(
             data=[
                 {
+                    "member_id": "1",
+                    "workdate_id": "101",
                     "members": {"name": "Test User", "email": "test@example.com"},
                     "work_dates": {"date": target_date},
                     "status": "Published",
