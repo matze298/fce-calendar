@@ -9,7 +9,7 @@ from typing import Any, cast
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-from .models import Assignment, Member, WorkDate
+from api.models import Assignment, Member, WorkDate
 
 
 def get_supabase_client() -> Client:
