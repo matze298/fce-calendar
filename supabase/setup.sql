@@ -7,6 +7,7 @@
 DROP TABLE IF EXISTS assignments CASCADE;
 DROP TABLE IF EXISTS work_dates CASCADE;
 DROP TABLE IF EXISTS members CASCADE;
+DROP TABLE IF EXISTS settings CASCADE;
 
 DROP TYPE IF EXISTS seniority_type CASCADE;
 DROP TYPE IF EXISTS availability_type CASCADE;
@@ -53,10 +54,20 @@ CREATE TABLE assignments (
   UNIQUE(member_id, workdate_id)
 );
 
--- 5. Row Level Security (RLS) - GDPR Compliance
+-- 5. Settings Table (Scheduler configuration)
+CREATE TABLE settings (
+  id INT PRIMARY KEY DEFAULT 1,
+  cooldown_days INT NOT NULL DEFAULT 21,
+  last_updated TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT one_row_only CHECK (id = 1)
+);
+
+-- 6. Row Level Security (RLS) - GDPR Compliance
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE work_dates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
 -- Strict Admin-Only Policies (Updated for Prototype)
 -- Allow 'anon' to read so we can see the calendar without login
@@ -73,7 +84,10 @@ CREATE POLICY "Anyone can insert assignments" ON assignments FOR INSERT TO anon,
 CREATE POLICY "Anyone can delete assignments" ON assignments FOR DELETE TO anon, authenticated USING (true);
 CREATE POLICY "Admins can do everything on assignments" ON assignments FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- 6. Seed Data: 50 realistic German members
+CREATE POLICY "Anyone can view settings" ON settings FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admins can do everything on settings" ON settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 7. Seed Data: 50 realistic German members
 INSERT INTO members (name, email, seniority_level, availability, historical_shifts, is_approved) VALUES
 ('Max Mustermann', 'max@mustermann.de', 'Senior', 'Any', 12, true),
 ('Sabine Schmidt', 'sabine@schmidt.de', 'Standard', 'Weekends', 5, true),
@@ -131,7 +145,11 @@ INSERT INTO members (name, email, is_approved, is_admin)
 VALUES ('Admin', 'dev@localhost.test', true, true)
 ON CONFLICT (email) DO UPDATE SET is_approved = true, is_admin = true;
 
--- 7. Seed Data: 6 months of WorkDates (May 2026 - Oct 2026)
+-- Seed Settings
+INSERT INTO settings (id, cooldown_days) VALUES (1, 21)
+ON CONFLICT (id) DO NOTHING;
+
+-- 8. Seed Data: 6 months of WorkDates (May 2026 - Oct 2026)
 -- Logic: Fri, Sat, Sun always open.
 -- Tue, Wed open every 3 weeks (starting May 5th, 2026).
 INSERT INTO work_dates (date, required_people, is_important_shift, is_weekend)
