@@ -269,4 +269,40 @@ test.describe('Admin Dashboard', () => {
     // Wait for the dialogs to be processed. Using a poll for dialogCount ensures async operations are complete.
     await expect.poll(() => dialogCount).toBe(2, { timeout: 15000 });
   });
+
+  test('Adjusting cooldown slider and saving settings', async ({ page }) => {
+    // GIVEN a mocked settings update route
+    let capturedBody: any = null;
+    await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
+      const method = route.request().method();
+      if (method === 'PATCH' || method === 'PUT') {
+        capturedBody = route.request().postDataJSON();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.goto('/admin');
+    await expect(page.locator('h1')).toContainText('Admin-Bereich');
+
+    // WHEN adjusting the slider
+    const slider = page.locator('#cooldown-slider');
+    await slider.fill('45'); // Playwright fill works for range inputs
+
+    // AND clicking Speichern
+    const saveBtn = page.getByRole('button', { name: 'Speichern' });
+    const dialogPromise = page.waitForEvent('dialog');
+    await saveBtn.click();
+
+    // THEN the success dialog is shown
+    const dialog = await dialogPromise;
+    expect(dialog.message()).toContain('erfolgreich gespeichert');
+    await dialog.accept();
+
+    // AND the correct data was sent to Supabase
+    expect(capturedBody).toMatchObject({
+      cooldown_days: 45
+    });
+  });
 });
