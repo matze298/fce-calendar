@@ -294,13 +294,19 @@ test.describe('Admin Dashboard', () => {
 
     // AND clicking Speichern
     const saveBtn = page.getByRole('button', { name: 'Speichern' });
-    const dialogPromise = page.waitForEvent('dialog');
+
+    let successDialogFound = false;
+    page.on('dialog', async dialog => {
+      if (dialog.message().includes('erfolgreich gespeichert')) {
+        successDialogFound = true;
+      }
+      await dialog.accept();
+    });
+
     await saveBtn.click();
 
-    // THEN the success dialog is shown
-    const dialog = await dialogPromise;
-    expect(dialog.message()).toContain('erfolgreich gespeichert');
-    await dialog.accept();
+    // THEN the success dialog was shown
+    await expect.poll(() => successDialogFound).toBe(true);
 
     // AND the correct data was sent to Supabase
     expect(capturedBody).toMatchObject({
