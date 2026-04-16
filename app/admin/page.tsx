@@ -1,68 +1,55 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 
-type Member = {
+interface Member {
   id: string;
   name: string;
-  email: string;
   seniority_level: string;
-  historical_shifts: number;
-  is_approved: boolean;
-  is_admin: boolean;
-  created_at: string;
-};
+}
 
-type WorkDate = {
+interface WorkDate {
   id: string;
   date: string;
   required_people: number;
   is_important_shift: boolean;
   is_weekend: boolean;
-};
+}
 
-type Assignment = {
+interface Assignment {
   id: string;
   workdate_id: string;
   member_id: string;
   status: 'Draft' | 'Published';
-  members: { name: string };
-};
-
-type Settings = {
-  id: number;
-  cooldown_days: number;
-  last_updated: string;
-};
+  members: {
+    name: string;
+  };
+}
 
 export default function AdminDashboard() {
   const [members, setMembers] = useState<Member[]>([]);
   const [workDates, setWorkDates] = useState<WorkDate[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSavingPlan, setIsSavingPlan] = useState(false); // Renamed for clarity
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
-
-  // New state for settings
   const [cooldownDays, setCooldownDays] = useState<number>(21);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [settingsId, setSettingsId] = useState<number | null>(null); // To store the ID of the settings row
-
+  const [settingsId, setSettingsId] = useState<number | null>(null);
   const router = useRouter();
 
   const fetchData = async () => {
     setLoading(true);
-
-    // Check Auth Status & Permissions
     const { data: { user } } = await supabase.auth.getUser();
+
     if (!user) {
       router.push('/login');
       return;
@@ -132,35 +119,36 @@ export default function AdminDashboard() {
   const addAssignment = async (workdateId: string, memberId: string) => {
     if (!memberId) return;
     const hasDrafts = assignments.some(a => a.status === 'Draft');
-    const { error } = await supabase
-      .from('assignments')
-      .insert({
-        workdate_id: workdateId,
-        member_id: memberId,
-        status: hasDrafts ? 'Draft' : 'Published'
-      });
 
-    if (error) {
-      if (error.code === '23505') {
-        alert('Dieses Mitglied ist an diesem Tag bereits eingeteilt.');
-      } else {
-        alert('Fehler beim Zuweisen: ' + error.message);
-      }
-    } else {
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .insert({
+          workdate_id: workdateId,
+          member_id: memberId,
+          status: hasDrafts ? 'Draft' : 'Published'
+        });
+
+      if (error) throw error;
       setAddingToDate(null);
-      fetchData();
+      await fetchData();
+    } catch (err: any) {
+      alert('Fehler beim Hinzufügen: ' + err.message);
     }
   };
 
   const removeAssignment = async (id: string) => {
-    if (!confirm('Zuweisung wirklich löschen?')) return;
-    const { error } = await supabase
-      .from('assignments')
-      .delete()
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('id', id);
 
-    if (error) alert(error.message);
-    else fetchData();
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert('Fehler beim Entfernen: ' + err.message);
+    }
   };
 
   const savePlan = async () => {
@@ -172,7 +160,7 @@ export default function AdminDashboard() {
         .eq('status', 'Draft');
 
       if (error) throw error;
-      alert('Plan wurde erfolgreich gespeichert.');
+      alert('Der Dienstplan wurde erfolgreich veröffentlicht.');
       await fetchData();
     } catch (err: any) {
       alert('Fehler beim Speichern: ' + err.message);
@@ -182,7 +170,7 @@ export default function AdminDashboard() {
   };
 
   const cancelPlan = async () => {
-    if (!confirm('Möchten Sie den aktuellen Entwurf wirklich verwerfen?')) return;
+    if (!confirm('Möchten Sie alle Entwürfe wirklich verwerfen?')) return;
     setIsCancelling(true);
     try {
       const { error } = await supabase
@@ -193,22 +181,20 @@ export default function AdminDashboard() {
       if (error) throw error;
       await fetchData();
     } catch (err: any) {
-      alert('Fehler beim Verwerfen: ' + err.message);
+      alert('Fehler beim Abbrechen: ' + err.message);
     } finally {
       setIsCancelling(false);
     }
   };
 
   const resetPlan = async () => {
-    if (!confirm('🚨 ACHTUNG: Dies löscht ALLE Zuweisungen (Drafts UND veröffentlichte Pläne)! Diese Aktion kann nicht rückgängig gemacht werden. Möchten Sie wirklich alles löschen?')) return;
-
+    if (!confirm('ACHTUNG: Möchten Sie wirklich ALLE Zuweisungen (auch bereits veröffentlichte) löschen? Dies kann nicht rückgängig gemacht werden.')) return;
     setIsResetting(true);
     try {
-      // Supabase requires a filter for delete. We target all assignments by using a filter that matches all.
       const { error } = await supabase
         .from('assignments')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .neq('status', 'X'); // Delete all rows
 
       if (error) throw error;
       alert('Der gesamte Dienstplan wurde erfolgreich zurückgesetzt.');
@@ -263,17 +249,16 @@ export default function AdminDashboard() {
       try {
         result = JSON.parse(text);
       } catch (e) {
-        result = { error: `Server antwortete mit: ${text.substring(0, 100)}...` };
+        console.error("Failed to parse response as JSON:", text);
+        throw new Error("Server antwortete mit ungültigem Format.");
       }
 
-      if (response.ok) {
-        alert(`Erfolg: ${result.assignments_count} Schichten wurden als Entwurf geplant.`);
-        await fetchData();
-      } else {
-        alert(`API-Fehler (${response.status}): ${result.error || 'Unbekannter Fehler'}`);
-      }
+      if (result.error) throw new Error(result.error);
+
+      alert(`${result.assignments_count} Schichten wurden als Entwurf geplant.`);
+      await fetchData();
     } catch (err: any) {
-      alert(`Verbindungsfehler: ${err.message || 'Der Server ist nicht erreichbar'}. Stellen Sie sicher, dass 'npx vercel dev' läuft.`);
+      alert('Fehler bei der Generierung: ' + err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -350,7 +335,7 @@ export default function AdminDashboard() {
                   onClick={savePlan}
                   disabled={isSavingPlan || isCancelling}
                 >
-                  {isSavingPlan ? 'Speichert...' : 'Speichern'}
+                  {isSavingPlan ? 'Speichert...' : 'Entwurf speichern'}
                 </button>
                 <div className="w-px h-6 bg-white/20 mx-1"></div>
                 <button
@@ -399,61 +384,6 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
-
-        {/* New Settings Section */}
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
-              Schichtplan-Einstellungen
-            </h2>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <div className="flex flex-col md:flex-row items-center gap-4">
-              <div className="flex-grow flex items-center gap-4">
-                <div className="flex flex-col flex-grow">
-                  <div className="flex justify-between items-center mb-1">
-                    <label htmlFor="cooldown-slider" className="text-xs font-bold uppercase text-secondary/60 tracking-wider">
-                      Abkühlphase
-                    </label>
-                    <span className="text-2xl font-black text-secondary">{cooldownDays} Tage</span>
-                  </div>
-                  <input
-                    id="cooldown-slider"
-                    type="range"
-                    min="0"
-                    max="60"
-                    step="1"
-                    value={cooldownDays}
-                    onChange={(e) => setCooldownDays(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary border border-black/5"
-                  />
-                  <div className="flex justify-between text-[10px] font-bold text-muted mt-1 px-1">
-                    <span>0 TAGE</span>
-                    <span>30 TAGE</span>
-                    <span>60 TAGE</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={saveSettings}
-                disabled={isSavingSettings || isGenerating}
-                className="bg-secondary text-white px-5 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSavingSettings ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Speichert...
-                  </>
-                ) : (
-                  'Speichern'
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-muted mt-2 ml-3">
-              Nach wie vielen Tagen darf ein Mitglied wieder für denselben oder einen wichtigen/Wochenend-Dienst eingeteilt werden? (0 = keine Abkühlphase)
-            </p>
-          </div>
-        </section>
 
         <section>
           <div className="flex items-center justify-between mb-6">
@@ -556,6 +486,61 @@ export default function AdminDashboard() {
                 <p className="text-muted italic">Keine Arbeitstage gefunden. Führen Sie das Setup-Script in Supabase aus.</p>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* New Settings Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
+              Schichtplan-Einstellungen
+            </h2>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row items-center gap-4">
+              <div className="flex-grow flex items-center gap-4">
+                <div className="flex flex-col flex-grow">
+                  <div className="flex justify-between items-center mb-1">
+                    <label htmlFor="cooldown-slider" className="text-xs font-bold uppercase text-secondary/60 tracking-wider">
+                      Abkühlphase
+                    </label>
+                    <span className="text-2xl font-black text-secondary">{cooldownDays} Tage</span>
+                  </div>
+                  <input
+                    id="cooldown-slider"
+                    type="range"
+                    min="0"
+                    max="60"
+                    step="1"
+                    value={cooldownDays}
+                    onChange={(e) => setCooldownDays(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary border border-black/5"
+                  />
+                  <div className="flex justify-between text-[10px] font-bold text-muted mt-1 px-1">
+                    <span>0 TAGE</span>
+                    <span>30 TAGE</span>
+                    <span>60 TAGE</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={saveSettings}
+                disabled={isSavingSettings || isGenerating}
+                className="bg-secondary text-white px-5 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSavingSettings ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Speichert...
+                  </>
+                ) : (
+                  'Speichern'
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-muted mt-2 ml-3">
+              Nach wie vielen Tagen darf ein Mitglied wieder für denselben oder einen wichtigen/Wochenend-Dienst eingeteilt werden? (0 = keine Abkühlphase)
+            </p>
           </div>
         </section>
 
