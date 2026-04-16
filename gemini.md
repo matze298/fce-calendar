@@ -43,5 +43,8 @@ def test_fairness_distribution():
     assert result[0].member_id == member_with_zero_shifts.id
 ```
 
+## 🐍 Python Standards
+- **Imports:** Never use relative imports for Python (unless not avoidable, e.g. for tests). Always prefer absolute imports starting from the project root (e.g., `from api.models import Member`).
+
 ## 📝 Documentation Maintenance
 Maintain the **[WEBAPP_GUIDE.md](./docs/WEBAPP_GUIDE.md)** as a concise technical overview for Python developers. Whenever adding new pages, API routes, or core frontend utilities, update the tables in that guide to reflect the changes.
