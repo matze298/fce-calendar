@@ -82,34 +82,45 @@ export default function AdminDashboard() {
 
     setIsAdmin(true);
 
-    const { data: membersData } = await supabase
-      .from('members')
-      .select('*')
-      .order('name');
+    // Fetch other data (members, workDates, assignments) - existing logic remains
+    const { data: membersData } = await supabase.from('members').select('*').order('name');
+    const { data: datesData } = await supabase.from('work_dates').select('*').order('date');
+    const { data: assignData } = await supabase.from('assignments').select('*, members(name)');
 
-    const { data: datesData } = await supabase
-      .from('work_dates')
-      .select('*')
-      .order('date');
+    // Fetch settings with error handling
+    let fetchedSettingsData = null;
+    try {
+      const { data: settingsResult, error: settingsError } = await supabase
+        .from('settings')
+        .select('*')
+        .limit(1)
+        .single();
 
-    const { data: assignData } = await supabase
-      .from('assignments')
-      .select('*, members(name)');
+      if (settingsError) {
+        console.error("Error fetching settings:", settingsError.message);
+        // Keep default cooldownDays and null settingsId if fetch fails
+      } else {
+        fetchedSettingsData = settingsResult;
+      }
+    } catch (error) {
+      console.error("Unexpected error fetching settings:", error);
+      // Keep default cooldownDays and null settingsId if an unexpected error occurs
+    }
 
-    // Fetch settings
-    const { data: settingsData } = await supabase
-      .from('settings')
-      .select('*')
-      .limit(1)
-      .single();
+    if (fetchedSettingsData) {
+      setCooldownDays(fetchedSettingsData.cooldown_days);
+      setSettingsId(fetchedSettingsData.id);
+    } else {
+      // Ensure cooldownDays has a default if settings failed to load and settingsId remains null
+      setCooldownDays(21); // Default value
+      setSettingsId(null); // Explicitly set to null if not found
+      // Optionally, inform the user about the loading failure, though the save action will alert them.
+      console.warn("Settings could not be loaded, using default values.");
+    }
 
     if (membersData) setMembers(membersData);
     if (datesData) setWorkDates(datesData);
     if (assignData) setAssignments(assignData as any);
-    if (settingsData) {
-      setCooldownDays(settingsData.cooldown_days);
-      setSettingsId(settingsData.id);
-    }
 
     setLoading(false);
   };
@@ -208,8 +219,9 @@ export default function AdminDashboard() {
   // New function to save settings
   const saveSettings = async () => {
     if (settingsId === null) {
-        alert('Einstellungen konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
-        return;
+      // This alert is shown if settings failed to load initially (settingsId is null)
+      alert('Einstellungen konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
+      return;
     }
     setIsSavingSettings(true);
     try {
@@ -340,7 +352,7 @@ export default function AdminDashboard() {
                 <button
                   className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50"
                   onClick={generateSchedule}
-                  disabled={isGenerating || isSavingPlan || isCancelling}
+                  disabled={isGenerating || isSavingPlan || isCancelling || isSavingSettings}
                 >
                   {isGenerating ? '...' : 'Neu generieren'}
                 </button>
@@ -349,7 +361,7 @@ export default function AdminDashboard() {
               <button
                 className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
                 onClick={generateSchedule}
-                disabled={isGenerating}
+                disabled={isGenerating || isSavingSettings}
               >
                 {isGenerating ? (
                   <>
@@ -370,7 +382,7 @@ export default function AdminDashboard() {
           <div className="bg-primary/20 border-2 border-primary border-dashed p-4 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-3 text-secondary">
               <div className="bg-primary p-2 rounded-full animate-pulse">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
               </div>
               <div>
                 <p className="font-black text-sm uppercase tracking-tight">Vorschau-Modus</p>
@@ -378,8 +390,8 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex gap-2">
-               <button onClick={cancelPlan} className="text-xs font-bold px-3 py-1.5 hover:bg-black/5 rounded-lg transition-colors">Entwurf löschen</button>
-               <button onClick={savePlan} className="bg-secondary text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm">Jetzt speichern</button>
+              <button onClick={cancelPlan} className="text-xs font-bold px-3 py-1.5 hover:bg-black/5 rounded-lg transition-colors">Entwurf löschen</button>
+              <button onClick={savePlan} className="bg-secondary text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm">Jetzt speichern</button>
             </div>
           </div>
         )}
@@ -393,25 +405,34 @@ export default function AdminDashboard() {
           </div>
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <div className="flex flex-col md:flex-row items-center gap-4">
-              <div className="flex-grow flex items-center gap-3">
-                <label htmlFor="cooldown-slider" className="text-sm font-medium text-secondary whitespace-nowrap">
-                  Abkühlphase (Tage):
-                </label>
-                <input
-                  id="cooldown-slider"
-                  type="range"
-                  min="0"
-                  max="60"
-                  value={cooldownDays}
-                  onChange={(e) => setCooldownDays(parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                  style={{ '--value': cooldownDays } as any} // For potential custom styling if needed
-                />
-                <span className="text-lg font-bold text-secondary w-10 text-center">{cooldownDays}</span>
+              <div className="flex-grow flex items-center gap-4">
+                <div className="flex flex-col flex-grow">
+                  <div className="flex justify-between items-center mb-1">
+                    <label htmlFor="cooldown-slider" className="text-xs font-bold uppercase text-secondary/60 tracking-wider">
+                      Abkühlphase
+                    </label>
+                    <span className="text-2xl font-black text-secondary">{cooldownDays} Tage</span>
+                  </div>
+                  <input
+                    id="cooldown-slider"
+                    type="range"
+                    min="0"
+                    max="60"
+                    step="1"
+                    value={cooldownDays}
+                    onChange={(e) => setCooldownDays(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary border border-black/5"
+                  />
+                  <div className="flex justify-between text-[10px] font-bold text-muted mt-1 px-1">
+                    <span>0 TAGE</span>
+                    <span>30 TAGE</span>
+                    <span>60 TAGE</span>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={saveSettings}
-                disabled={isSavingSettings}
+                disabled={isSavingSettings || isGenerating}
                 className="bg-secondary text-white px-5 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
               >
                 {isSavingSettings ? (
@@ -444,11 +465,10 @@ export default function AdminDashboard() {
               return (
                 <div
                   key={wd.id}
-                  className={`p-5 rounded-xl border-2 transition-all shadow-sm bg-white ${
-                    wd.is_important_shift
+                  className={`p-5 rounded-xl border-2 transition-all shadow-sm bg-white ${wd.is_important_shift
                       ? 'border-primary ring-1 ring-primary/20'
                       : 'border-transparent'
-                  }`}
+                    }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-lg font-bold text-secondary">
@@ -469,7 +489,7 @@ export default function AdminDashboard() {
                         className={`p-1 rounded-md transition-colors ${addingToDate === wd.id ? 'bg-secondary text-white' : 'text-secondary hover:bg-gray-100'}`}
                         title="Mitglied manuell hinzufügen"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
                       </button>
                     </div>
                   </div>
@@ -516,7 +536,7 @@ export default function AdminDashboard() {
                               className="opacity-0 group-hover/assign:opacity-100 p-1 text-gray-300 hover:text-red-500 transition-all"
                               title="Zuweisung entfernen"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
                             </button>
                           </div>
                         </div>
@@ -540,7 +560,7 @@ export default function AdminDashboard() {
           <div className="bg-red-50/50 rounded-2xl p-6 border border-red-100 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="bg-red-100 p-3 rounded-full text-red-600">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
               </div>
               <div>
                 <h3 className="text-lg font-bold text-red-900">Gefahrenbereich</h3>
