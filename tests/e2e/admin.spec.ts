@@ -284,6 +284,8 @@ test.describe('Admin Dashboard', () => {
     });
 
     await page.goto('/admin');
+    // Wait for the loading state to be false, then assert the header is visible.
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 });
     await expect(page.locator('h1')).toContainText('Admin-Bereich');
 
     // WHEN adjusting the slider
