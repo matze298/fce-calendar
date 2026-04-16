@@ -2,6 +2,7 @@
 
 import json
 import os
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler
 from typing import Any, cast
 
@@ -19,37 +20,55 @@ def get_supabase_client() -> Client:
     return create_client(url, key)
 
 
-def generate_assignments(members: list[dict[str, Any]], work_dates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def get_scheduler_settings(supabase: Client) -> dict[str, Any]:
+    """Fetches scheduler settings from the Supabase settings table."""
+    settings_response = supabase.table("settings").select("*").limit(1).execute()
+    if settings_response.data and len(settings_response.data) > 0:
+        return cast("dict[str, Any]", settings_response.data[0])
+    # Fallback to default if no settings are found (should not happen if seeded)
+    return {"cooldown_days": 21}
+
+
+def generate_assignments(
+    members: list[dict[str, Any]], work_dates: list[dict[str, Any]], cooldown_days: int = 21
+) -> list[dict[str, Any]]:
     """Generates the shift assignments."""
     # Keep track of shift counts in memory during the process
     for m in members:
         m["current_shifts"] = m.get("historical_shifts", 0)
 
-    assignments = []
+    assignments: list[dict[str, Any]] = []
+
+    # Map workdate_id to actual date for cooldown calculation
+    date_map = {d["id"]: datetime.strptime(d["date"], "%Y-%m-%d").astimezone(UTC) for d in work_dates}
 
     # PHASE 1: Fill 'Important' shifts with Senior members
     important_dates = [d for d in work_dates if d.get("is_important_shift")]
     for date in important_dates:
         eligible_seniors = [m for m in members if m.get("seniority_level") == "Senior"]
-        _assign_members_to_date(date, eligible_seniors, assignments)
+        _assign_members_to_date(date, eligible_seniors, assignments, date_map, cooldown_days)
 
     # PHASE 2: Fill remaining weekend dates
     weekend_dates = [d for d in work_dates if d.get("is_weekend") and not d.get("is_important_shift")]
     for date in weekend_dates:
         eligible_members = [m for m in members if m.get("availability") in ["Weekends", "Any"]]
-        _assign_members_to_date(date, eligible_members, assignments)
+        _assign_members_to_date(date, eligible_members, assignments, date_map, cooldown_days)
 
     # PHASE 3: Fill remaining weekday dates
     remaining_dates = [d for d in work_dates if not d.get("is_weekend") and not d.get("is_important_shift")]
     for date in remaining_dates:
         eligible_members = [m for m in members if m.get("availability") in ["Weekdays", "Any"]]
-        _assign_members_to_date(date, eligible_members, assignments)
+        _assign_members_to_date(date, eligible_members, assignments, date_map, cooldown_days)
 
     return assignments
 
 
 def _assign_members_to_date(
-    date: dict[str, Any], eligible_pool: list[dict[str, Any]], assignments: list[dict[str, Any]]
+    date: dict[str, Any],
+    eligible_pool: list[dict[str, Any]],
+    assignments: list[dict[str, Any]],
+    date_map: dict[int, datetime],
+    cooldown_days: int,
 ) -> None:
     """Helper to pick members from a pool and update counts."""
     needed = date.get("required_people", 1)
@@ -59,8 +78,26 @@ def _assign_members_to_date(
     if remaining_needed <= 0:
         return
 
+    current_date = date_map[date["id"]]
+
+    def is_in_cooldown(member_id: int) -> bool:
+        """Check if member has an assignment within the cooldown window."""
+        member_assignments = [a for a in assignments if a["member_id"] == member_id]
+        for a in member_assignments:
+            assigned_date = date_map[a["workdate_id"]]
+            if abs((current_date - assigned_date).days) < cooldown_days:
+                return True
+        return False
+
+    # Filter pool by cooldown
+    cooldown_free_pool = [m for m in eligible_pool if not is_in_cooldown(m["id"])]
+
+    # If no one is available without cooldown, we must pick from the full eligible pool
+    # to ensure the shift is filled (Soft constraint fallback)
+    final_pool = cooldown_free_pool or eligible_pool
+
     # FAIRNESS RULE: Sort by historical_shifts (Ascending)
-    sorted_pool = sorted(eligible_pool, key=lambda x: x["current_shifts"])
+    sorted_pool = sorted(final_pool, key=lambda x: x["current_shifts"])
     chosen_members = sorted_pool[:remaining_needed]
 
     for m in chosen_members:
@@ -89,7 +126,11 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801
                 self._send_error(400, "Missing members or work dates in database")
                 return
 
-            assignments = generate_assignments(members, work_dates)
+            # 2. Fetch cooldown days from the settings table
+            settings = get_scheduler_settings(supabase)
+            cooldown_days = settings.get("cooldown_days", 21)  # Default to 21 if not found
+
+            assignments = generate_assignments(members, work_dates, cooldown_days=cooldown_days)
 
             # Save results to database as 'Draft'
             if assignments:

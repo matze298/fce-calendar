@@ -98,13 +98,24 @@ test.describe('Admin Dashboard', () => {
         body: JSON.stringify([]),
       });
     });
+
+    // GIVEN mocked settings
+    await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, cooldown_days: 21, last_updated: new Date().toISOString() }]),
+      });
+    });
   });
 
 
   // WHEN accessing the admin page
   test('Admin Login flow and dashboard access', async ({ page }) => {
     await page.goto('/admin');
-    // THEN the page is loaded with the correct URL and contains "Admin-Bereich"
+    // THEN the page should be fully loaded and contain "Admin-Bereich"
+    // Wait for the loading state to be false, then assert the header is visible.
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 }); // Wait for loading indicator to disappear
     await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
     await expect(page.locator('h1')).toContainText('Admin-Bereich');
   });
@@ -236,14 +247,17 @@ test.describe('Admin Dashboard', () => {
     await expect(resetBtn).toBeEnabled();
 
     // Set up dialog handling for both the confirmation AND the success alert
+    // Ensure we're handling potential loading spinners or delays before dialogs appear
     let dialogCount = 0;
     page.on('dialog', async dialog => {
       dialogCount++;
       if (dialogCount === 1) {
+        // First dialog is the confirmation
         expect(dialog.message()).toContain('ACHTUNG');
         await dialog.accept();
       } else if (dialogCount === 2) {
-        expect(dialog.message()).toContain('erfolgreich zurückgesetzt');
+        // Second dialog is the success message after fetchData completes
+        expect(dialog.message()).toContain('Der gesamte Dienstplan wurde erfolgreich zurückgesetzt.');
         await dialog.accept();
       }
     });
@@ -251,7 +265,52 @@ test.describe('Admin Dashboard', () => {
     // WHEN clicking Reset Plan
     await resetBtn.click();
 
-    // THEN both dialogs should have been handled
-    await expect.poll(() => dialogCount).toBe(2);
+    // THEN both dialogs should have been handled and the success alert should have appeared
+    // Wait for the dialogs to be processed. Using a poll for dialogCount ensures async operations are complete.
+    await expect.poll(() => dialogCount).toBe(2, { timeout: 15000 });
+  });
+
+  test('Adjusting cooldown slider and saving settings', async ({ page }) => {
+    // GIVEN a mocked settings update route
+    let capturedBody: any = null;
+    await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
+      const method = route.request().method();
+      if (method === 'PATCH' || method === 'PUT') {
+        capturedBody = route.request().postDataJSON();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.goto('/admin');
+    // Wait for the loading state to be false, then assert the header is visible.
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('Admin-Bereich');
+
+    // WHEN adjusting the slider
+    const slider = page.locator('#cooldown-slider');
+    await slider.fill('45'); // Playwright fill works for range inputs
+
+    // AND clicking Speichern
+    const saveBtn = page.getByRole('button', { name: 'Speichern' });
+
+    let successDialogFound = false;
+    page.on('dialog', async dialog => {
+      if (dialog.message().includes('erfolgreich gespeichert')) {
+        successDialogFound = true;
+      }
+      await dialog.accept();
+    });
+
+    await saveBtn.click();
+
+    // THEN the success dialog was shown
+    await expect.poll(() => successDialogFound).toBe(true);
+
+    // AND the correct data was sent to Supabase
+    expect(capturedBody).toMatchObject({
+      cooldown_days: 45
+    });
   });
 });
