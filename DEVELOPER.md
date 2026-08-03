@@ -28,10 +28,11 @@ To start the project locally, follow these steps:
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-publishable
    ```
 3. **Start the Server:**
-   Use the Vercel CLI to test both the frontend and API routes locally:
+   Use the project development script for normal local frontend development. It runs Next.js with Webpack to avoid Turbopack filesystem and HMR issues on mounted workspaces:
    ```bash
-   npx vercel dev
+   npm run dev
    ```
+   Use `npx vercel dev` only when you specifically need to test Vercel's Python/serverless-function emulation; it may invoke Turbopack and reproduce the panic described above.
 4. **Login:**
    Register via the app or use the test account:
    - **User:** `dev@localhost.test`
@@ -80,7 +81,7 @@ Add the following to your `.env.local`:
 
 ### Local Testing
 To trigger the reminder script manually without waiting for the schedule:
-1. Start the dev server: `npx vercel dev`
+1. Start the dev server: `npx vercel dev` (required here to emulate Vercel's Python serverless function runtime)
 2. Use `curl` to hit the endpoint with the required authorization:
    ```bash
    curl -H "Authorization: Bearer your-cron-secret" http://localhost:3000/api/cron/send_reminders
@@ -92,10 +93,14 @@ To trigger the reminder script manually without waiting for the schedule:
 The project uses a two-tier testing strategy to ensure the fairness algorithm and critical UI paths remain stable.
 
 ### Backend Tests (Python)
-The scheduling logic is tested using `pytest`. These tests use mocked Supabase data and do not require a live database.
+The scheduling logic is tested using `pytest`, and the Python code is type-checked with `ty`. These checks use mocked Supabase data and do not require a live database.
 - **Run all backend tests:**
   ```bash
   PYTHONPATH=. uv run pytest tests/backend/
+  ```
+- **Run the backend type check:**
+  ```bash
+  uv run ty check .
   ```
 
 ### End-to-End (E2E) Tests (Playwright)

@@ -20,6 +20,8 @@ hooks = [{
     language = "system",
     entry = "ruff check --fix",
     files = "\\.py$",
+    always_run = true,
+    pass_filenames = false,
   },
   {
     id = "ruff-format",
@@ -27,6 +29,8 @@ hooks = [{
     language = "system",
     entry = "ruff format",
     files = "\\.py$",
+    always_run = true,
+    pass_filenames = false,
   },
   {
     id = "ty-check",
@@ -34,6 +38,8 @@ hooks = [{
     language = "system",
     entry = "ty check",
     files = "\\.py$",
+    always_run = true,
+    pass_filenames = false,
   },
 ]
 repo = "local"
