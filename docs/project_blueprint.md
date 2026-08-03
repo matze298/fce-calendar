@@ -32,7 +32,8 @@
 
 ## 5. Local Development
 * `supabase start` for local Docker DB.
-* `vercel dev` for local frontend/backend testing.
+* `npm run dev` for normal local frontend development. The script uses Webpack instead of Turbopack to avoid filesystem and HMR issues on mounted workspaces.
+* `npx vercel dev` only when testing Vercel's Python/serverless-function emulation.
 * `seed.sql` with fake club member data (e.g., "Max Mustermann").
 
 ## 6. Automated Reminders (Vercel Cron Jobs)
