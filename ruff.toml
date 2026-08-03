@@ -5,6 +5,7 @@ src = ["*/src"]
 select = ["ALL"]
 ignore = [
     "COM812", # Conflicts with ruff formatter
+    "CPY001", # no copyright required
     "D401", # Imperative Docstrings
     "G004", # f-string logging
     "S602", # Allow shell-execution
