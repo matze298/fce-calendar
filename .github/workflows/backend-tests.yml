@@ -8,7 +8,7 @@ on:
 
 jobs:
   test-backend:
-    name: Backend Tests (pytest & ruff)
+    name: Backend Tests (pytest, ruff & ty)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +29,9 @@ jobs:
 
       - name: Format Check with Ruff
         run: uv run ruff format --check .
+
+      - name: Type Check with ty
+        run: uv run ty check .
 
       - name: Run Backend Tests
         run: |

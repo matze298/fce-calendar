@@ -10,7 +10,7 @@
 
 ## 2. The Tool Stack
 * **Frontend Testing:** `Vitest` (for fast React component testing) and `Playwright` (for End-to-End browser testing).
-* **Backend/Algorithm Testing:** `pytest` (for the Python fairness logic).
+* **Backend/Algorithm Testing:** `pytest` (for the Python fairness logic) and `ty` (for Python type checking).
 * **Database CI:** Supabase GitHub Actions (to verify migrations apply cleanly).
 * **Linting/Formatting:** `ESLint` + `Prettier` (Frontend), `Ruff` or `Flake8` (Python).
 

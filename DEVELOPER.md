@@ -93,10 +93,14 @@ To trigger the reminder script manually without waiting for the schedule:
 The project uses a two-tier testing strategy to ensure the fairness algorithm and critical UI paths remain stable.
 
 ### Backend Tests (Python)
-The scheduling logic is tested using `pytest`. These tests use mocked Supabase data and do not require a live database.
+The scheduling logic is tested using `pytest`, and the Python code is type-checked with `ty`. These checks use mocked Supabase data and do not require a live database.
 - **Run all backend tests:**
   ```bash
   PYTHONPATH=. uv run pytest tests/backend/
+  ```
+- **Run the backend type check:**
+  ```bash
+  uv run ty check .
   ```
 
 ### End-to-End (E2E) Tests (Playwright)
