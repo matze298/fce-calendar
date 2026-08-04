@@ -71,20 +71,20 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             else:
                 assignments = [Assignment.from_dict(a) for a in cast("list[dict[str, Any]]", response.data)]
 
-            target_assignments = [a for a in assignments if a.work_dates and a.work_dates.date == target_date]
+            due_reminders = [
+                (a.members, a.work_dates)
+                for a in assignments
+                if a.members and a.work_dates and a.work_dates.date == target_date
+            ]
 
             sent_count = 0
             email_override = os.getenv("DEVELOPMENT_EMAIL_OVERRIDE")
 
-            for a in target_assignments:
-                if not a.members or not a.work_dates:
-                    continue
+            for member, work_date in due_reminders:
+                email = email_override or member.email
 
-                email = email_override or a.members.email
-                name = a.members.name
-
-                if email and name:
-                    self._send_reminder_email(email, name, a.work_dates)
+                if email and member.name:
+                    self._send_reminder_email(email, member.name, work_date)
                     sent_count += 1
 
             # Success Response

@@ -45,8 +45,16 @@ export function toTimeInputValue(value: string | null | undefined): string {
   return value ? value.slice(0, 5) : '';
 }
 
-/** Day of week (0 = Sunday) for a YYYY-MM-DD string, read without a UTC detour. */
-function dayOfWeek(isoDate: string): number {
+/**
+ * Reads a YYYY-MM-DD string as a local calendar date. `new Date(isoDate)` would treat it as
+ * UTC midnight, which formats as the previous day for viewers behind UTC.
+ */
+export function parseIsoDate(isoDate: string): Date {
   const [year, month, day] = isoDate.split('-').map(Number);
-  return new Date(year, month - 1, day).getDay();
+  return new Date(year, month - 1, day);
+}
+
+/** Day of week (0 = Sunday) for a YYYY-MM-DD string. */
+function dayOfWeek(isoDate: string): number {
+  return parseIsoDate(isoDate).getDay();
 }

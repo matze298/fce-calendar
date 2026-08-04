@@ -5,6 +5,7 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { checkAdminAccess } from '@/utils/adminGuard';
 
 type Member = {
   id: string;
@@ -39,19 +40,13 @@ export default function ManageMembersPage() {
   const fetchData = async () => {
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const access = await checkAdminAccess();
+    if (access === 'unauthenticated') {
       router.push('/login');
       return;
     }
 
-    const { data: profile } = await supabase
-      .from('members')
-      .select('is_admin, is_approved')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (!profile || !profile.is_admin || !profile.is_approved) {
+    if (access === 'forbidden') {
       router.push('/admin');
       return;
     }

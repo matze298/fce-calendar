@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults } from '@/utils/startTime';
+import { checkAdminAccess } from '@/utils/adminGuard';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -26,19 +27,13 @@ export default function SettingsPage() {
   const fetchSettings = async () => {
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const access = await checkAdminAccess();
+    if (access === 'unauthenticated') {
       router.push('/login');
       return;
     }
 
-    const { data: profile } = await supabase
-      .from('members')
-      .select('is_admin, is_approved')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (!profile || !profile.is_admin || !profile.is_approved) {
+    if (access === 'forbidden') {
       router.push('/admin');
       return;
     }
@@ -155,7 +150,7 @@ export default function SettingsPage() {
               max="60"
               step="1"
               value={cooldownDays}
-              onChange={(e) => setCooldownDays(parseInt(e.target.value))}
+              onChange={(e) => setCooldownDays(parseInt(e.target.value, 10))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary border border-black/5"
             />
             <div className="flex justify-between text-[10px] font-bold text-muted mt-1 px-1">

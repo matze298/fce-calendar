@@ -5,7 +5,8 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { toTimeInputValue } from '@/utils/startTime';
+import { toTimeInputValue, parseIsoDate } from '@/utils/startTime';
+import { checkAdminAccess } from '@/utils/adminGuard';
 
 interface Member {
   id: string;
@@ -48,20 +49,14 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const access = await checkAdminAccess();
 
-    if (!user) {
+    if (access === 'unauthenticated') {
       router.push('/login');
       return;
     }
 
-    const { data: profile } = await supabase
-      .from('members')
-      .select('is_admin, is_approved')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (!profile || !profile.is_admin || !profile.is_approved) {
+    if (access === 'forbidden') {
       setIsAdmin(false);
       setLoading(false);
       return;
@@ -352,7 +347,7 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-baseline gap-2">
                       <span className="text-lg font-bold text-secondary">
-                        {new Date(wd.date).toLocaleDateString('de-DE', {
+                        {parseIsoDate(wd.date).toLocaleDateString('de-DE', {
                           weekday: 'short',
                           day: '2-digit',
                           month: '2-digit'

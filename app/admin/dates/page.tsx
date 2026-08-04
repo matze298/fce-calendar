@@ -5,7 +5,8 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { defaultStartTimeFor, isWeekendDate, readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
+import { defaultStartTimeFor, isWeekendDate, parseIsoDate, readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
+import { checkAdminAccess } from '@/utils/adminGuard';
 
 type WorkDate = {
   id: string;
@@ -34,52 +35,54 @@ export default function ManageDatesPage() {
 
   const router = useRouter();
 
-  const fetchDates = async () => {
+  const loadPage = async () => {
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const access = await checkAdminAccess();
+    if (access === 'unauthenticated') {
       router.push('/login');
       return;
     }
 
-    const { data: profile } = await supabase
-      .from('members')
-      .select('is_admin, is_approved')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (!profile || !profile.is_admin || !profile.is_approved) {
-      router.push('/admin'); // Redirect back if not authorized
+    if (access === 'forbidden') {
+      router.push('/admin');
       return;
     }
 
     setIsAdmin(true);
 
+    // The form pre-fills from the defaults, so both reads have to land before the page is usable.
+    await Promise.all([fetchDates(), fetchTimeDefaults()]);
+
+    setLoading(false);
+  };
+
+  const fetchDates = async () => {
     const { data } = await supabase
       .from('work_dates')
       .select('*')
       .order('date', { ascending: true });
 
     if (data) setWorkDates(data);
+  };
 
-    const { data: settingsData, error: settingsError } = await supabase
+  const fetchTimeDefaults = async () => {
+    const { data, error } = await supabase
       .from('settings')
       .select('*')
       .limit(1)
       .single();
 
-    if (settingsError) {
-      console.error('Error fetching settings:', settingsError.message);
-    } else if (settingsData) {
-      setTimeDefaults(readStartTimeDefaults(settingsData));
+    if (error) {
+      console.error('Error fetching settings:', error.message);
+      return;
     }
 
-    setLoading(false);
+    if (data) setTimeDefaults(readStartTimeDefaults(data));
   };
 
   useEffect(() => {
-    fetchDates();
+    loadPage();
   }, []);
 
   const resetForm = () => {
@@ -263,13 +266,14 @@ export default function ManageDatesPage() {
             </h2>
             <div className="space-y-3">
               {workDates.length > 0 ? workDates.map((wd) => {
-                const monthLabel = new Date(wd.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+                const dateObj = parseIsoDate(wd.date);
+                const monthLabel = dateObj.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
                 return (
                 <div key={wd.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center text-white ${wd.is_important_shift ? 'bg-primary text-secondary font-black' : 'bg-secondary'}`}>
-                      <span className="text-[10px] uppercase">{new Date(wd.date).toLocaleDateString('de-DE', { weekday: 'short' })}</span>
-                      <span className="text-sm font-bold">{new Date(wd.date).getDate()}</span>
+                      <span className="text-[10px] uppercase">{dateObj.toLocaleDateString('de-DE', { weekday: 'short' })}</span>
+                      <span className="text-sm font-bold">{dateObj.getDate()}</span>
                     </div>
                     <div>
                       <p className="font-bold text-secondary">
