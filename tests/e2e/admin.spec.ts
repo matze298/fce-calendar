@@ -241,6 +241,27 @@ test.describe('Admin Dashboard', () => {
     );
   });
 
+  test('Switching from an edited Veranstaltung to a fresh date applies that date\'s default', async ({ page }) => {
+    // GIVEN an existing Veranstaltung has been loaded for editing, so its stored time fills the form
+    await page.goto('/admin/dates');
+    await expect(page.locator('body')).toContainText('Heimspiel gegen TSV', { timeout: 15000 });
+    await page.locator('button[title="Termin bearbeiten"]').first().click();
+    await expect(page.locator('input[type="time"]')).toHaveValue('19:00');
+
+    // WHEN picking a different date that has no Veranstaltung yet
+    await page.locator('input[type="date"]').fill('2026-09-19');
+
+    // THEN the weekend default replaces the loaded time instead of carrying it over
+    await expect(page.locator('input[type="time"]')).toHaveValue('15:30');
+
+    // WHEN typing a time by hand and then picking yet another fresh date
+    await page.locator('input[type="time"]').fill('17:45');
+    await page.locator('input[type="date"]').fill('2026-09-18');
+
+    // THEN the hand-typed time survives, because only an untouched field gets pre-filled
+    await expect(page.locator('input[type="time"]')).toHaveValue('17:45');
+  });
+
   // WHEN editing a member on the members page
   test('Editing a member and saving changes', async ({ page }) => {
     await page.goto('/admin/members');
