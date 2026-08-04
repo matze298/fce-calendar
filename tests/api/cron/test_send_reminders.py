@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import ANY, MagicMock, patch
 
 from api.cron.send_reminders import handler
+from api.models import WorkDate
 
 
 class TestHandler:
@@ -21,7 +22,7 @@ class TestHandler:
                     "member_id": "1",
                     "workdate_id": "101",
                     "members": {"name": "Test User", "email": "test@example.com"},
-                    "work_dates": {"date": target_date},
+                    "work_dates": {"date": target_date, "name": "Sommerfest", "start_time": "15:30:00"},
                     "status": "Published",
                 }
             ]
@@ -45,8 +46,12 @@ class TestHandler:
             # WHEN processing the request
             handler._process_request(h)
 
-            # THEN reminder mails have been sent
-            h._send_reminder_email.assert_called_once_with("test@example.com", "Test User", target_date)
+            # THEN reminder mails have been sent for the parsed work date
+            h._send_reminder_email.assert_called_once_with(
+                "test@example.com",
+                "Test User",
+                WorkDate(id="101", date=target_date, name="Sommerfest", start_time="15:30:00"),
+            )
 
             # THEN the request sended a response with code 200
             h.send_response.assert_called_with(200)
@@ -80,7 +85,7 @@ class TestHandler:
             h = MagicMock(spec=handler)
 
             # WHEN sending a reminder email
-            handler._send_reminder_email(h, "test@example.com", "Test User", target_date)
+            handler._send_reminder_email(h, "test@example.com", "Test User", WorkDate(id="101", date=target_date))
 
             # THEN resend has been called
             mock_resend.assert_called_once()
@@ -94,3 +99,47 @@ class TestHandler:
                     "html": ANY,
                 }
             )
+
+    def test_send_reminder_email_includes_name_and_start_time(self) -> None:
+        """Tests that a named Veranstaltung with a start time reaches the email body."""
+        # GIVEN a named work date with a start time and an ampersand in the name
+        work_date = WorkDate(id="101", date="2026-09-12", name="Heimspiel TSV & SV", start_time="15:30:00")
+
+        # GIVEN a mocked Email-sender function
+        with patch("resend.Emails.send") as mock_resend:
+            # GIVEN a mock handler instance
+            h = MagicMock(spec=handler)
+
+            # WHEN sending a reminder email
+            handler._send_reminder_email(h, "test@example.com", "Test User", work_date)
+
+            # THEN the rendered HTML carries the escaped name and the time suffix
+            html_body = mock_resend.call_args[0][0]["html"]
+            assert "Heimspiel TSV &amp; SV" in html_body
+            assert ", 15:30 Uhr" in html_body
+            assert "{{" not in html_body
+
+    def test_send_reminder_email_omits_missing_name_and_start_time(self) -> None:
+        """Tests that an unnamed Veranstaltung without a start time leaves no residue."""
+        # GIVEN a work date without a name and without a start time
+        work_date = WorkDate(id="101", date="2026-09-12")
+
+        # GIVEN a mocked Email-sender function
+        with patch("resend.Emails.send") as mock_resend:
+            # GIVEN a mock handler instance
+            h = MagicMock(spec=handler)
+
+            # WHEN sending a reminder email
+            handler._send_reminder_email(h, "test@example.com", "Test User", work_date)
+
+            # THEN no placeholder and no time text survive, and the date still renders
+            html_body = mock_resend.call_args[0][0]["html"]
+            assert "{{" not in html_body
+            assert "Uhr" not in html_body
+            assert "12.09.2026" in html_body
+
+            # THEN the date paragraph carries no wrapper markup and no extra whitespace
+            original_date_paragraph = (
+                '<p style="margin: 0; font-size: 18px; font-weight: bold; color: #1a1a1a;">12.09.2026</p>'
+            )
+            assert original_date_paragraph in html_body

@@ -45,6 +45,8 @@ class WorkDate:
 
     id: str
     date: str
+    name: str | None = None
+    start_time: str | None = None
     required_people: int = 1
     is_important_shift: bool = False
     is_weekend: bool = False
@@ -55,6 +57,8 @@ class WorkDate:
         return cls(
             id=data["id"],
             date=data["date"],
+            name=data.get("name"),
+            start_time=data.get("start_time"),
             required_people=data.get("required_people", 1),
             is_important_shift=data.get("is_important_shift", False),
             is_weekend=data.get("is_weekend", False),
@@ -91,7 +95,12 @@ class Assignment:
         work_date = None
         if data.get("work_dates"):
             wd_data = data["work_dates"]
-            work_date = WorkDate(id=data.get("workdate_id", ""), date=wd_data.get("date", ""))
+            work_date = WorkDate(
+                id=data.get("workdate_id", ""),
+                date=wd_data.get("date", ""),
+                name=wd_data.get("name"),
+                start_time=wd_data.get("start_time"),
+            )
 
         return cls(
             id=data.get("id"),

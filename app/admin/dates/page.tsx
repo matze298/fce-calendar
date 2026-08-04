@@ -5,10 +5,14 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { defaultStartTimeFor, isWeekendDate, parseIsoDate, readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
+import { checkAdminAccess } from '@/utils/adminGuard';
 
 type WorkDate = {
   id: string;
   date: string;
+  name: string | null;
+  start_time: string | null;
   required_people: number;
   is_important_shift: boolean;
   is_weekend: boolean;
@@ -21,72 +25,117 @@ export default function ManageDatesPage() {
 
   // Form State
   const [selectedDate, setSelectedDate] = useState('');
+  const [name, setName] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [startTimeTouched, setStartTimeTouched] = useState(false);
   const [requiredPeople, setRequiredPeople] = useState(1);
   const [isImportant, setIsImportant] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [timeDefaults, setTimeDefaults] = useState<StartTimeDefaults>(START_TIME_FALLBACKS);
 
   const router = useRouter();
 
-  const fetchDates = async () => {
+  const loadPage = async () => {
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const access = await checkAdminAccess();
+    if (access === 'unauthenticated') {
       router.push('/login');
       return;
     }
 
-    const { data: profile } = await supabase
-      .from('members')
-      .select('is_admin, is_approved')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (!profile || !profile.is_admin || !profile.is_approved) {
-      router.push('/admin'); // Redirect back if not authorized
+    if (access === 'forbidden') {
+      router.push('/admin');
       return;
     }
 
     setIsAdmin(true);
 
+    // The form pre-fills from the defaults, so both reads have to land before the page is usable.
+    await Promise.all([fetchDates(), fetchTimeDefaults()]);
+
+    setLoading(false);
+  };
+
+  const fetchDates = async () => {
     const { data } = await supabase
       .from('work_dates')
       .select('*')
       .order('date', { ascending: true });
 
     if (data) setWorkDates(data);
-    setLoading(false);
+  };
+
+  const fetchTimeDefaults = async () => {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('Error fetching settings:', error.message);
+      return;
+    }
+
+    if (data) setTimeDefaults(readStartTimeDefaults(data));
   };
 
   useEffect(() => {
-    fetchDates();
+    loadPage();
   }, []);
+
+  const resetForm = () => {
+    setSelectedDate('');
+    setName('');
+    setStartTime('');
+    setStartTimeTouched(false);
+    setRequiredPeople(1);
+    setIsImportant(false);
+  };
+
+  const loadForm = (wd: WorkDate) => {
+    setSelectedDate(wd.date);
+    setName(wd.name ?? '');
+    setStartTime(toTimeInputValue(wd.start_time));
+    setStartTimeTouched(false);
+    setRequiredPeople(wd.required_people);
+    setIsImportant(wd.is_important_shift);
+  };
+
+  const handleDateChange = (date: string) => {
+    const existing = workDates.find(wd => wd.date === date);
+    if (existing) {
+      loadForm(existing);
+      return;
+    }
+
+    setSelectedDate(date);
+    if (date && !startTimeTouched) setStartTime(defaultStartTimeFor(date, timeDefaults));
+  };
 
   const handleSaveDate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDate) return;
 
     setIsSubmitting(true);
-    const dateObj = new Date(selectedDate);
-    // 0 = Sunday, 5 = Friday, 6 = Saturday
-    const isWeekend = [0, 5, 6].includes(dateObj.getDay());
 
     const { error } = await supabase
       .from('work_dates')
       .upsert({
         date: selectedDate,
+        name: name.trim() || null,
+        start_time: startTime || null,
         required_people: requiredPeople,
         is_important_shift: isImportant,
-        is_weekend: isWeekend
+        is_weekend: isWeekendDate(selectedDate)
       }, { onConflict: 'date' });
 
     if (error) {
       alert('Fehler beim Speichern: ' + error.message);
     } else {
       await fetchDates();
-      setSelectedDate('');
-      setRequiredPeople(1);
-      setIsImportant(false);
+      resetForm();
     }
     setIsSubmitting(false);
   };
@@ -136,10 +185,35 @@ export default function ManageDatesPage() {
                   <input
                     type="date"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    onChange={(e) => handleDateChange(e.target.value)}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
                     required
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1">NAME (OPTIONAL)</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="z. B. Heimspiel gegen TSV Musterdorf"
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1">BEGINN</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => {
+                      setStartTime(e.target.value);
+                      setStartTimeTouched(true);
+                    }}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  />
+                  <p className="text-[10px] text-muted mt-1">
+                    Vorbelegt aus den Standardzeiten. Leeren, wenn keine Uhrzeit angezeigt werden soll.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1">PERSONEN-BEDARF</label>
@@ -167,11 +241,7 @@ export default function ManageDatesPage() {
                   {selectedDate && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedDate('');
-                        setRequiredPeople(1);
-                        setIsImportant(false);
-                      }}
+                      onClick={resetForm}
                       className="flex-1 border-2 border-gray-100 text-secondary font-bold py-3 rounded-xl hover:bg-gray-50 transition-all"
                     >
                       Reset
@@ -195,18 +265,25 @@ export default function ManageDatesPage() {
               <span className="bg-secondary text-white text-[10px] px-2 py-0.5 rounded-full">{workDates.length}</span>
             </h2>
             <div className="space-y-3">
-              {workDates.length > 0 ? workDates.map((wd) => (
+              {workDates.length > 0 ? workDates.map((wd) => {
+                const dateObj = parseIsoDate(wd.date);
+                const monthLabel = dateObj.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+                return (
                 <div key={wd.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center text-white ${wd.is_important_shift ? 'bg-primary text-secondary font-black' : 'bg-secondary'}`}>
-                      <span className="text-[10px] uppercase">{new Date(wd.date).toLocaleDateString('de-DE', { weekday: 'short' })}</span>
-                      <span className="text-sm font-bold">{new Date(wd.date).getDate()}</span>
+                      <span className="text-[10px] uppercase">{dateObj.toLocaleDateString('de-DE', { weekday: 'short' })}</span>
+                      <span className="text-sm font-bold">{dateObj.getDate()}</span>
                     </div>
                     <div>
                       <p className="font-bold text-secondary">
-                        {new Date(wd.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+                        {wd.name ?? monthLabel}
                       </p>
-                      <p className="text-xs text-muted">Bedarf: {wd.required_people} Personen</p>
+                      <p className="text-xs text-muted">
+                        {wd.name && `${monthLabel} · `}
+                        Bedarf: {wd.required_people} Personen
+                        {wd.start_time && ` · Beginn: ${toTimeInputValue(wd.start_time)}`}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -215,9 +292,7 @@ export default function ManageDatesPage() {
                     )}
                     <button
                       onClick={() => {
-                        setSelectedDate(wd.date);
-                        setRequiredPeople(wd.required_people);
-                        setIsImportant(wd.is_important_shift);
+                        loadForm(wd);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                       className="p-2 text-gray-300 hover:text-secondary hover:bg-gray-50 rounded-lg transition-all"
@@ -234,7 +309,8 @@ export default function ManageDatesPage() {
                     </button>
                   </div>
                 </div>
-              )) : (
+                );
+              }) : (
                 <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-100">
                   <p className="text-muted italic">Keine Termine geplant. Wählen Sie ein Datum aus.</p>
                 </div>

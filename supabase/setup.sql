@@ -38,6 +38,8 @@ CREATE TABLE members (
 CREATE TABLE work_dates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   date DATE NOT NULL UNIQUE,
+  name TEXT,
+  start_time TIME,
   required_people INT NOT NULL DEFAULT 1,
   is_important_shift BOOLEAN NOT NULL DEFAULT FALSE,
   is_weekend BOOLEAN NOT NULL DEFAULT FALSE,
@@ -58,6 +60,9 @@ CREATE TABLE assignments (
 CREATE TABLE settings (
   id INT PRIMARY KEY DEFAULT 1,
   cooldown_days INT NOT NULL DEFAULT 21,
+  default_start_time_mon_thu TIME NOT NULL DEFAULT '20:00',
+  default_start_time_fri TIME NOT NULL DEFAULT '20:00',
+  default_start_time_sat_sun TIME NOT NULL DEFAULT '15:30',
   last_updated TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT one_row_only CHECK (id = 1)
@@ -152,9 +157,13 @@ ON CONFLICT (id) DO NOTHING;
 -- 8. Seed Data: 6 months of WorkDates (May 2026 - Oct 2026)
 -- Logic: Fri, Sat, Sun always open.
 -- Tue, Wed open every 3 weeks (starting May 5th, 2026).
-INSERT INTO work_dates (date, required_people, is_important_shift, is_weekend)
+INSERT INTO work_dates (date, start_time, required_people, is_important_shift, is_weekend)
 SELECT
   d::date,
+  CASE
+    WHEN EXTRACT(DOW FROM d) IN (0, 6) THEN TIME '15:30' -- Sat, Sun start in the afternoon
+    ELSE TIME '20:00'
+  END,
   CASE
     WHEN EXTRACT(DOW FROM d) IN (0, 6) THEN 2 -- Sat, Sun need 2 people
     ELSE 1 -- Fri, Tue, Wed need 1 person

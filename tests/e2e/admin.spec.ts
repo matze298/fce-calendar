@@ -85,7 +85,15 @@ test.describe('Admin Dashboard', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([
-          { id: '101', date: '2024-05-01', required_people: 1, is_important_shift: true, is_weekend: false },
+          {
+            id: '101',
+            date: '2024-05-01',
+            name: 'Heimspiel gegen TSV',
+            start_time: '19:00:00',
+            required_people: 1,
+            is_important_shift: true,
+            is_weekend: false,
+          },
         ]),
       });
     });
@@ -99,12 +107,19 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
-    // GIVEN mocked settings
+    // GIVEN mocked settings, with a Friday default distinct from the Mon-Thu one
     await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([{ id: 1, cooldown_days: 21, last_updated: new Date().toISOString() }]),
+        body: JSON.stringify({
+          id: 1,
+          cooldown_days: 21,
+          default_start_time_mon_thu: '20:00:00',
+          default_start_time_fri: '18:30:00',
+          default_start_time_sat_sun: '15:30:00',
+          last_updated: new Date().toISOString(),
+        }),
       });
     });
   });
@@ -165,6 +180,86 @@ test.describe('Admin Dashboard', () => {
     await expect(page).toHaveURL(/\/admin\/dates/);
     await expect(page.locator('body')).toContainText('Mai 2024');
     await expect(page.locator('body')).toContainText('Wichtig');
+  });
+
+  test('Dashboard cards show the Veranstaltung name and start time', async ({ page }) => {
+    // GIVEN the admin dashboard with a named Veranstaltung
+    await page.goto('/admin');
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 });
+
+    // THEN the card shows the name and the start time next to the date
+    await expect(page.locator('body')).toContainText('Heimspiel gegen TSV');
+    await expect(page.locator('body')).toContainText('19:00');
+
+    // THEN the raw PostgREST value is not rendered, so the time really was trimmed
+    await expect(page.locator('body')).not.toContainText('19:00:00');
+  });
+
+  test('Start time pre-fills from the configured weekday defaults', async ({ page }) => {
+    // GIVEN the Termin-Management page
+    await page.goto('/admin/dates');
+    const dateInput = page.locator('input[type="date"]');
+    const timeInput = page.locator('input[type="time"]');
+    await expect(dateInput).toBeVisible({ timeout: 15000 });
+
+    // WHEN picking a Wednesday
+    await dateInput.fill('2026-09-16');
+
+    // THEN the Mon-Thu default is pre-filled
+    await expect(timeInput).toHaveValue('20:00');
+
+    // WHEN picking a Friday
+    await dateInput.fill('2026-09-18');
+
+    // THEN the Friday default is pre-filled
+    await expect(timeInput).toHaveValue('18:30');
+
+    // WHEN picking a Saturday
+    await dateInput.fill('2026-09-19');
+
+    // THEN the weekend default is pre-filled
+    await expect(timeInput).toHaveValue('15:30');
+  });
+
+  test('Editing a Veranstaltung shows its stored name and start time', async ({ page }) => {
+    // GIVEN the Termin-Management page listing a named Veranstaltung
+    await page.goto('/admin/dates');
+    await expect(page.locator('body')).toContainText('Heimspiel gegen TSV', { timeout: 15000 });
+
+    // THEN the list also shows its start time and keeps the month label
+    await expect(page.locator('body')).toContainText('Beginn: 19:00');
+    await expect(page.locator('body')).not.toContainText('19:00:00');
+    await expect(page.locator('body')).toContainText('Mai 2024');
+
+    // WHEN clicking edit on that entry
+    await page.locator('button[title="Termin bearbeiten"]').first().click();
+
+    // THEN the form carries the stored values rather than a bucket default
+    await expect(page.locator('input[type="time"]')).toHaveValue('19:00');
+    await expect(page.locator('input[placeholder="z. B. Heimspiel gegen TSV Musterdorf"]')).toHaveValue(
+      'Heimspiel gegen TSV'
+    );
+  });
+
+  test('Switching from an edited Veranstaltung to a fresh date applies that date\'s default', async ({ page }) => {
+    // GIVEN an existing Veranstaltung has been loaded for editing, so its stored time fills the form
+    await page.goto('/admin/dates');
+    await expect(page.locator('body')).toContainText('Heimspiel gegen TSV', { timeout: 15000 });
+    await page.locator('button[title="Termin bearbeiten"]').first().click();
+    await expect(page.locator('input[type="time"]')).toHaveValue('19:00');
+
+    // WHEN picking a different date that has no Veranstaltung yet
+    await page.locator('input[type="date"]').fill('2026-09-19');
+
+    // THEN the weekend default replaces the loaded time instead of carrying it over
+    await expect(page.locator('input[type="time"]')).toHaveValue('15:30');
+
+    // WHEN typing a time by hand and then picking yet another fresh date
+    await page.locator('input[type="time"]').fill('17:45');
+    await page.locator('input[type="date"]').fill('2026-09-18');
+
+    // THEN the hand-typed time survives, because only an untouched field gets pre-filled
+    await expect(page.locator('input[type="time"]')).toHaveValue('17:45');
   });
 
   // WHEN editing a member on the members page
@@ -270,30 +365,33 @@ test.describe('Admin Dashboard', () => {
     await expect.poll(() => dialogCount).toBe(2, { timeout: 15000 });
   });
 
-  test('Adjusting cooldown slider and saving settings', async ({ page }) => {
-    // GIVEN a mocked settings update route
-    let capturedBody: any = null;
+  test('Saving the settings page stores the cooldown and all three start time defaults', async ({ page }) => {
+    // GIVEN a mocked settings update route that leaves reads to the beforeEach handler
+    let capturedBody: Record<string, unknown> | null = null;
     await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
       const method = route.request().method();
       if (method === 'PATCH' || method === 'PUT') {
         capturedBody = route.request().postDataJSON();
         await route.fulfill({ status: 204 });
       } else {
-        await route.continue();
+        await route.fallback();
       }
     });
 
+    // GIVEN the admin dashboard
     await page.goto('/admin');
-    // Wait for the loading state to be false, then assert the header is visible.
     await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Admin-Bereich');
 
-    // WHEN adjusting the slider
-    const slider = page.locator('#cooldown-slider');
-    await slider.fill('45'); // Playwright fill works for range inputs
+    // WHEN following the settings link
+    await page.getByRole('link', { name: 'Einstellungen' }).click();
 
-    // AND clicking Speichern
-    const saveBtn = page.getByRole('button', { name: 'Speichern' });
+    // THEN the settings page opens with the stored values
+    await expect(page).toHaveURL(/\/admin\/settings/);
+    await expect(page.locator('#default-fri')).toHaveValue('18:30', { timeout: 15000 });
+
+    // WHEN changing the cooldown and the weekend default
+    await page.locator('#cooldown-slider').fill('45');
+    await page.locator('#default-sat-sun').fill('16:00');
 
     let successDialogFound = false;
     page.on('dialog', async dialog => {
@@ -303,14 +401,43 @@ test.describe('Admin Dashboard', () => {
       await dialog.accept();
     });
 
-    await saveBtn.click();
+    // AND clicking Speichern
+    await page.getByRole('button', { name: 'Speichern' }).click();
 
     // THEN the success dialog was shown
     await expect.poll(() => successDialogFound).toBe(true);
 
-    // AND the correct data was sent to Supabase
+    // AND all four settings were sent to Supabase
     expect(capturedBody).toMatchObject({
-      cooldown_days: 45
+      cooldown_days: 45,
+      default_start_time_mon_thu: '20:00',
+      default_start_time_fri: '18:30',
+      default_start_time_sat_sun: '16:00',
     });
+  });
+
+  test('Saving with an empty name and cleared time stores null for both', async ({ page }) => {
+    // GIVEN the work date write is captured
+    let capturedBody: Record<string, unknown> | null = null;
+    await page.route(url => url.href.includes('/rest/v1/work_dates'), async (route) => {
+      if (route.request().method() === 'POST') {
+        capturedBody = route.request().postDataJSON();
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([]) });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/admin/dates');
+    await expect(page.locator('input[type="date"]')).toBeVisible({ timeout: 15000 });
+
+    // WHEN picking a fresh date, clearing the pre-filled time, leaving the name empty and saving
+    await page.locator('input[type="date"]').fill('2026-09-19');
+    await page.locator('input[type="time"]').fill('');
+    await page.getByRole('button', { name: 'Termin festlegen' }).click();
+
+    // THEN both optional fields were sent as null rather than as empty strings
+    await expect.poll(() => capturedBody).not.toBeNull();
+    expect(capturedBody).toMatchObject({ name: null, start_time: null });
   });
 });

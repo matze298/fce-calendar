@@ -15,6 +15,7 @@ Each `page.tsx` file defines the UI for its directory's path.
 | `/register` | `app/register/page.tsx` | Member registration & account creation. |
 | `/admin` | `app/admin/page.tsx` | Main dashboard: Viewing assignments & triggering scheduling. |
 | `/admin/dates` | `app/admin/dates/page.tsx` | CRUD for work dates/shifts. |
+| `/admin/settings` | `app/admin/settings/page.tsx` | Scheduler configuration: default start times & cooldown period. |
 | `/admin/members` | `app/admin/members/page.tsx`| CRUD for club members & manual approvals. |
 
 ### 🛠️ API & Server Logic (`/app/api/**/route.ts` & `/api/**/*.py`)
