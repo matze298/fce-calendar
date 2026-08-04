@@ -85,7 +85,15 @@ test.describe('Admin Dashboard', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([
-          { id: '101', date: '2024-05-01', required_people: 1, is_important_shift: true, is_weekend: false },
+          {
+            id: '101',
+            date: '2024-05-01',
+            name: 'Heimspiel gegen TSV',
+            start_time: '19:00:00',
+            required_people: 1,
+            is_important_shift: true,
+            is_weekend: false,
+          },
         ]),
       });
     });
@@ -99,12 +107,19 @@ test.describe('Admin Dashboard', () => {
       });
     });
 
-    // GIVEN mocked settings
+    // GIVEN mocked settings, with a Friday default distinct from the Mon-Thu one
     await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([{ id: 1, cooldown_days: 21, last_updated: new Date().toISOString() }]),
+        body: JSON.stringify({
+          id: 1,
+          cooldown_days: 21,
+          default_start_time_mon_thu: '20:00:00',
+          default_start_time_fri: '18:30:00',
+          default_start_time_sat_sun: '15:30:00',
+          last_updated: new Date().toISOString(),
+        }),
       });
     });
   });
@@ -165,6 +180,51 @@ test.describe('Admin Dashboard', () => {
     await expect(page).toHaveURL(/\/admin\/dates/);
     await expect(page.locator('body')).toContainText('Mai 2024');
     await expect(page.locator('body')).toContainText('Wichtig');
+  });
+
+  test('Start time pre-fills from the configured weekday defaults', async ({ page }) => {
+    // GIVEN the Termin-Management page
+    await page.goto('/admin/dates');
+    const dateInput = page.locator('input[type="date"]');
+    const timeInput = page.locator('input[type="time"]');
+    await expect(dateInput).toBeVisible({ timeout: 15000 });
+
+    // WHEN picking a Wednesday
+    await dateInput.fill('2026-09-16');
+
+    // THEN the Mon-Thu default is pre-filled
+    await expect(timeInput).toHaveValue('20:00');
+
+    // WHEN picking a Friday
+    await dateInput.fill('2026-09-18');
+
+    // THEN the Friday default is pre-filled
+    await expect(timeInput).toHaveValue('18:30');
+
+    // WHEN picking a Saturday
+    await dateInput.fill('2026-09-19');
+
+    // THEN the weekend default is pre-filled
+    await expect(timeInput).toHaveValue('15:30');
+  });
+
+  test('Editing a Veranstaltung shows its stored name and start time', async ({ page }) => {
+    // GIVEN the Termin-Management page listing a named Veranstaltung
+    await page.goto('/admin/dates');
+    await expect(page.locator('body')).toContainText('Heimspiel gegen TSV', { timeout: 15000 });
+
+    // THEN the list also shows its start time and keeps the month label
+    await expect(page.locator('body')).toContainText('Beginn: 19:00');
+    await expect(page.locator('body')).toContainText('Mai 2024');
+
+    // WHEN clicking edit on that entry
+    await page.locator('button[title="Termin bearbeiten"]').first().click();
+
+    // THEN the form carries the stored values rather than a bucket default
+    await expect(page.locator('input[type="time"]')).toHaveValue('19:00');
+    await expect(page.locator('input[placeholder="z. B. Heimspiel gegen TSV Musterdorf"]')).toHaveValue(
+      'Heimspiel gegen TSV'
+    );
   });
 
   // WHEN editing a member on the members page
