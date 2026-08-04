@@ -17,7 +17,6 @@ class Member:
     exempt: bool = False
     is_approved: bool = False
     is_admin: bool = False
-    telegram_chat_id: str | None = None
     # Internal state for scheduling
     current_shifts: int = 0
 
@@ -34,7 +33,6 @@ class Member:
             exempt=data.get("exempt", False),
             is_approved=data.get("is_approved", False),
             is_admin=data.get("is_admin", False),
-            telegram_chat_id=data.get("telegram_chat_id"),
             current_shifts=data.get("historical_shifts", 0),
         )
 

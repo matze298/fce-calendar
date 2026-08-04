@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from html import escape
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from secrets import compare_digest
 from typing import Any, cast
 
 import resend
@@ -45,7 +46,9 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
         auth_header = self.headers.get("Authorization")
         cron_secret = os.getenv("CRON_SECRET")
 
-        if not auth_header or auth_header != f"Bearer {cron_secret}":
+        # Without a configured secret there is no header worth accepting. Interpolating an unset
+        # value would otherwise make "Bearer None" a valid credential.
+        if not cron_secret or not auth_header or not compare_digest(auth_header, f"Bearer {cron_secret}"):
             self.send_response(401)
             self.end_headers()
             self.wfile.write(b"Unauthorized")

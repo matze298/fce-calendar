@@ -9,10 +9,10 @@
 * **Continuous Integration (CI):** Handled by GitHub Actions. Runs automatically on every PR to ensure code quality, test the Python algorithm, and verify database migrations.
 
 ## 2. The Tool Stack
-* **Frontend Testing:** `Vitest` (for fast React component testing) and `Playwright` (for End-to-End browser testing).
+* **Frontend Testing:** `Playwright` (for End-to-End browser testing). *`Vitest` for component testing is a target, not current: it is not installed, and there are no frontend unit tests.*
 * **Backend/Algorithm Testing:** `pytest` (for the Python fairness logic) and `ty` (for Python type checking).
 * **Database CI:** Supabase GitHub Actions (to verify migrations apply cleanly).
-* **Linting/Formatting:** `ESLint` + `Prettier` (Frontend), `Ruff` or `Flake8` (Python).
+* **Linting/Formatting:** `ESLint` and `Ruff`. *`Prettier` is a target, not current: it is not configured.*
 
 ## 3. Implementation Phases (For the AI Agent)
 
@@ -22,7 +22,7 @@
 
 ### Phase 2: Python Backend Testing (`pytest`)
 * **Context:** The Python fairness algorithm (`/api/generate.py`) is the brain of the app. If it breaks, the club schedule breaks.
-1.  **Task:** Set up a `tests/backend/` directory.
+1.  **Task:** Set up a directory for the Python tests. This lives at `tests/api/`, mirroring the `api/` package layout.
 2.  **Task:** Write `pytest` test cases that mock Supabase database responses.
 3.  **Required Tests:** * Verify Seniors are assigned to Important shifts.
     * Verify historical shift sorting (fairness) works perfectly.
@@ -30,7 +30,7 @@
 
 ### Phase 3: Database Migration CI (Supabase)
 * **Context:** We cannot break the production database. Schema changes must be tested.
-1.  **Task:** Configure the Supabase GitHub Action (`.github/workflows/ci.yml`).
+1.  **Task:** Configure the Supabase GitHub Action (`.github/workflows/database-migrations.yml`).
 2.  **Workflow Logic:** On every PR, the action should spin up a temporary Supabase database, run `supabase db start`, apply all SQL migrations in `/supabase/migrations/`, and verify there are no conflicts or syntax errors before allowing the merge.
 
 ### Phase 4: E2E Guardrails (`Playwright`)
@@ -41,6 +41,11 @@
     * Navigating to the "Member List" and verifying data renders.
     * Clicking "Generate Schedule" and verifying the UI updates without crashing.
 
+### Phase 5: Frontend Build & Type Gating
+* **Context:** A page referencing an undeclared hook once broke `npm run build` and reached `main`, because no job compiled the frontend.
+1.  **Task:** `.github/workflows/frontend-checks.yml` runs `npx tsc --noEmit` and `npm run build` on every PR.
+2.  **Deliberately excluded:** `npm run lint`. It reports pre-existing errors, mostly `no-explicit-any` and `react-hooks/set-state-in-effect` across the admin pages, so gating on it requires refactoring first. Tracked in `ROADMAP.md`.
+
 ## 5. Security Check (GDPR)
-* The CI pipeline must include a step to check for leaked secrets (API keys) in the codebase.
+* The CI pipeline must include a step to check for leaked secrets (API keys) in the codebase. **Target, not current:** no such step exists.
 * Ensure test data used in `pytest` and Playwright uses fake German names (e.g., "Max Mustermann") and never pulls from the live production database.

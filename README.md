@@ -25,6 +25,8 @@ Technische Informationen zur Einrichtung, zum Datenbank-Setup und zur lokalen En
 
 👉 **[DEVELOPER.md](./DEVELOPER.md)**
 
+Den aktuellen Stand sowie die offenen Punkte vor dem Go-Live finden Sie in der **[ROADMAP.md](./ROADMAP.md)**.
+
 ## 🏗️ Architektur
 ![Architektur](./architecture.png)
 

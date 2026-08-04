@@ -74,6 +74,23 @@ class TestHandler:
             # THEN the request sent a response with code 401
             h.send_response.assert_called_with(401)
 
+    def test_process_request_rejects_when_cron_secret_is_unset(self) -> None:
+        """Tests that a missing CRON_SECRET denies every caller rather than accepting a literal."""
+        # GIVEN an environment with no CRON_SECRET at all
+        with patch.dict(os.environ, {}, clear=True):
+            h = MagicMock(spec=handler)
+            h.headers = MagicMock()
+            h.wfile = MagicMock()
+
+            # GIVEN a caller who guesses the header that an unset secret would interpolate into
+            h.headers.get.return_value = "Bearer None"
+
+            # WHEN processing the request
+            handler._process_request(h)
+
+            # THEN the request is rejected instead of running the mail job
+            h.send_response.assert_called_with(401)
+
     def test_send_reminder_email(self) -> None:
         """Tests the send_reminder_email function."""
         # GIVEN a target date

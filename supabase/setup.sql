@@ -24,7 +24,6 @@ CREATE TABLE members (
   auth_id UUID UNIQUE, -- Link to auth.users
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
-  telegram_chat_id TEXT,
   seniority_level seniority_type NOT NULL DEFAULT 'Standard',
   availability availability_type NOT NULL DEFAULT 'Any',
   historical_shifts INT NOT NULL DEFAULT 0,
