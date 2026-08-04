@@ -138,7 +138,7 @@ class TestHandler:
             assert "Uhr" not in html_body
             assert "12.09.2026" in html_body
 
-            # THEN the date paragraph is character-for-character the one from before this feature
+            # THEN the date paragraph carries no wrapper markup and no extra whitespace
             original_date_paragraph = (
                 '<p style="margin: 0; font-size: 18px; font-weight: bold; color: #1a1a1a;">12.09.2026</p>'
             )

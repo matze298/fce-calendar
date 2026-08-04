@@ -24,6 +24,22 @@ export function isWeekendDate(isoDate: string): boolean {
   return [0, 5, 6].includes(dayOfWeek(isoDate));
 }
 
+/** Normalizes a fetched settings row into input-ready bucket defaults. */
+export function readStartTimeDefaults(row: {
+  default_start_time_mon_thu?: string | null;
+  default_start_time_fri?: string | null;
+  default_start_time_sat_sun?: string | null;
+}): StartTimeDefaults {
+  return {
+    default_start_time_mon_thu:
+      toTimeInputValue(row.default_start_time_mon_thu) || START_TIME_FALLBACKS.default_start_time_mon_thu,
+    default_start_time_fri:
+      toTimeInputValue(row.default_start_time_fri) || START_TIME_FALLBACKS.default_start_time_fri,
+    default_start_time_sat_sun:
+      toTimeInputValue(row.default_start_time_sat_sun) || START_TIME_FALLBACKS.default_start_time_sat_sun,
+  };
+}
+
 /** Trims a PostgREST TIME value ("20:00:00") to what <input type="time"> accepts ("20:00"). */
 export function toTimeInputValue(value: string | null | undefined): string {
   return value ? value.slice(0, 5) : '';

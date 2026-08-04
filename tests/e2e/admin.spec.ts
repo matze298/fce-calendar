@@ -228,6 +228,7 @@ test.describe('Admin Dashboard', () => {
 
     // THEN the list also shows its start time and keeps the month label
     await expect(page.locator('body')).toContainText('Beginn: 19:00');
+    await expect(page.locator('body')).not.toContainText('19:00:00');
     await expect(page.locator('body')).toContainText('Mai 2024');
 
     // WHEN clicking edit on that entry
@@ -392,5 +393,30 @@ test.describe('Admin Dashboard', () => {
       default_start_time_fri: '18:30',
       default_start_time_sat_sun: '16:00',
     });
+  });
+
+  test('Saving with an empty name and cleared time stores null for both', async ({ page }) => {
+    // GIVEN the work date write is captured
+    let capturedBody: Record<string, unknown> | null = null;
+    await page.route(url => url.href.includes('/rest/v1/work_dates'), async (route) => {
+      if (route.request().method() === 'POST') {
+        capturedBody = route.request().postDataJSON();
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([]) });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/admin/dates');
+    await expect(page.locator('input[type="date"]')).toBeVisible({ timeout: 15000 });
+
+    // WHEN picking a fresh date, clearing the pre-filled time, leaving the name empty and saving
+    await page.locator('input[type="date"]').fill('2026-09-19');
+    await page.locator('input[type="time"]').fill('');
+    await page.getByRole('button', { name: 'Termin festlegen' }).click();
+
+    // THEN both optional fields were sent as null rather than as empty strings
+    await expect.poll(() => capturedBody).not.toBeNull();
+    expect(capturedBody).toMatchObject({ name: null, start_time: null });
   });
 });

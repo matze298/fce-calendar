@@ -5,7 +5,7 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { defaultStartTimeFor, isWeekendDate, START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
+import { defaultStartTimeFor, isWeekendDate, readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
 
 type WorkDate = {
   id: string;
@@ -63,13 +63,17 @@ export default function ManageDatesPage() {
 
     if (data) setWorkDates(data);
 
-    const { data: settingsData } = await supabase
+    const { data: settingsData, error: settingsError } = await supabase
       .from('settings')
       .select('*')
       .limit(1)
       .single();
 
-    if (settingsData) setTimeDefaults(settingsData);
+    if (settingsError) {
+      console.error('Error fetching settings:', settingsError.message);
+    } else if (settingsData) {
+      setTimeDefaults(readStartTimeDefaults(settingsData));
+    }
 
     setLoading(false);
   };
@@ -91,7 +95,7 @@ export default function ManageDatesPage() {
     setSelectedDate(wd.date);
     setName(wd.name ?? '');
     setStartTime(toTimeInputValue(wd.start_time));
-    setStartTimeTouched(true);
+    setStartTimeTouched(false);
     setRequiredPeople(wd.required_people);
     setIsImportant(wd.is_important_shift);
   };
@@ -258,7 +262,9 @@ export default function ManageDatesPage() {
               <span className="bg-secondary text-white text-[10px] px-2 py-0.5 rounded-full">{workDates.length}</span>
             </h2>
             <div className="space-y-3">
-              {workDates.length > 0 ? workDates.map((wd) => (
+              {workDates.length > 0 ? workDates.map((wd) => {
+                const monthLabel = new Date(wd.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+                return (
                 <div key={wd.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center text-white ${wd.is_important_shift ? 'bg-primary text-secondary font-black' : 'bg-secondary'}`}>
@@ -267,10 +273,10 @@ export default function ManageDatesPage() {
                     </div>
                     <div>
                       <p className="font-bold text-secondary">
-                        {wd.name ?? new Date(wd.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+                        {wd.name ?? monthLabel}
                       </p>
                       <p className="text-xs text-muted">
-                        {wd.name && `${new Date(wd.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} · `}
+                        {wd.name && `${monthLabel} · `}
                         Bedarf: {wd.required_people} Personen
                         {wd.start_time && ` · Beginn: ${toTimeInputValue(wd.start_time)}`}
                       </p>
@@ -299,7 +305,8 @@ export default function ManageDatesPage() {
                     </button>
                   </div>
                 </div>
-              )) : (
+                );
+              }) : (
                 <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-100">
                   <p className="text-muted italic">Keine Termine geplant. Wählen Sie ein Datum aus.</p>
                 </div>

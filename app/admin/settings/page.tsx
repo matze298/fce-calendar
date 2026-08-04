@@ -5,7 +5,7 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
+import { readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults } from '@/utils/startTime';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -54,11 +54,7 @@ export default function SettingsPage() {
     } else if (data) {
       setSettingsId(data.id);
       setCooldownDays(data.cooldown_days);
-      setTimeDefaults({
-        default_start_time_mon_thu: toTimeInputValue(data.default_start_time_mon_thu),
-        default_start_time_fri: toTimeInputValue(data.default_start_time_fri),
-        default_start_time_sat_sun: toTimeInputValue(data.default_start_time_sat_sun),
-      });
+      setTimeDefaults(readStartTimeDefaults(data));
     }
 
     setLoading(false);
