@@ -190,6 +190,9 @@ test.describe('Admin Dashboard', () => {
     // THEN the card shows the name and the start time next to the date
     await expect(page.locator('body')).toContainText('Heimspiel gegen TSV');
     await expect(page.locator('body')).toContainText('19:00');
+
+    // THEN the raw PostgREST value is not rendered, so the time really was trimmed
+    await expect(page.locator('body')).not.toContainText('19:00:00');
   });
 
   test('Start time pre-fills from the configured weekday defaults', async ({ page }) => {
