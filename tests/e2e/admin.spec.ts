@@ -330,30 +330,33 @@ test.describe('Admin Dashboard', () => {
     await expect.poll(() => dialogCount).toBe(2, { timeout: 15000 });
   });
 
-  test('Adjusting cooldown slider and saving settings', async ({ page }) => {
-    // GIVEN a mocked settings update route
-    let capturedBody: any = null;
+  test('Saving the settings page stores the cooldown and all three start time defaults', async ({ page }) => {
+    // GIVEN a mocked settings update route that leaves reads to the beforeEach handler
+    let capturedBody: Record<string, unknown> | null = null;
     await page.route(url => url.href.includes('/rest/v1/settings'), async (route) => {
       const method = route.request().method();
       if (method === 'PATCH' || method === 'PUT') {
         capturedBody = route.request().postDataJSON();
         await route.fulfill({ status: 204 });
       } else {
-        await route.continue();
+        await route.fallback();
       }
     });
 
+    // GIVEN the admin dashboard
     await page.goto('/admin');
-    // Wait for the loading state to be false, then assert the header is visible.
     await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Admin-Bereich');
 
-    // WHEN adjusting the slider
-    const slider = page.locator('#cooldown-slider');
-    await slider.fill('45'); // Playwright fill works for range inputs
+    // WHEN following the settings link
+    await page.getByRole('link', { name: 'Einstellungen' }).click();
 
-    // AND clicking Speichern
-    const saveBtn = page.getByRole('button', { name: 'Speichern' });
+    // THEN the settings page opens with the stored values
+    await expect(page).toHaveURL(/\/admin\/settings/);
+    await expect(page.locator('#default-fri')).toHaveValue('18:30', { timeout: 15000 });
+
+    // WHEN changing the cooldown and the weekend default
+    await page.locator('#cooldown-slider').fill('45');
+    await page.locator('#default-sat-sun').fill('16:00');
 
     let successDialogFound = false;
     page.on('dialog', async dialog => {
@@ -363,14 +366,18 @@ test.describe('Admin Dashboard', () => {
       await dialog.accept();
     });
 
-    await saveBtn.click();
+    // AND clicking Speichern
+    await page.getByRole('button', { name: 'Speichern' }).click();
 
     // THEN the success dialog was shown
     await expect.poll(() => successDialogFound).toBe(true);
 
-    // AND the correct data was sent to Supabase
+    // AND all four settings were sent to Supabase
     expect(capturedBody).toMatchObject({
-      cooldown_days: 45
+      cooldown_days: 45,
+      default_start_time_mon_thu: '20:00',
+      default_start_time_fri: '18:30',
+      default_start_time_sat_sun: '16:00',
     });
   });
 });

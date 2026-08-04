@@ -41,9 +41,6 @@ export default function AdminDashboard() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
-  const [cooldownDays, setCooldownDays] = useState<number>(21);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [settingsId, setSettingsId] = useState<number | null>(null);
   const router = useRouter();
 
   const fetchData = async () => {
@@ -73,44 +70,6 @@ export default function AdminDashboard() {
     const { data: membersData } = await supabase.from('members').select('*').order('name');
     const { data: datesData } = await supabase.from('work_dates').select('*').order('date');
     const { data: assignData } = await supabase.from('assignments').select('*, members(name)');
-
-    // Fetch settings with error handling
-    let fetchedSettingsData = null;
-    try {
-      const { data: settingsResult, error: settingsError } = await supabase
-        .from('settings')
-        .select('*')
-        .limit(1)
-        .single();
-
-      if (settingsError) {
-        console.error("Error fetching settings:", settingsError.message);
-        // Fallback for E2E tests where JWT mocking or network issues might cause failures
-        if (settingsError.message.includes("JWT") ||
-            settingsError.message.includes("key") ||
-            settingsError.message.includes("table") ||
-            settingsError.message.includes("fetch")) {
-          console.warn("Using fallback settings for testing environment due to:", settingsError.message);
-          fetchedSettingsData = { id: 1, cooldown_days: 21 };
-        }
-      } else {
-        fetchedSettingsData = settingsResult;
-      }
-    } catch (error) {
-      console.error("Unexpected error fetching settings:", error);
-      // Keep default cooldownDays and null settingsId if an unexpected error occurs
-    }
-
-    if (fetchedSettingsData) {
-      setCooldownDays(fetchedSettingsData.cooldown_days);
-      setSettingsId(fetchedSettingsData.id);
-    } else {
-      // Ensure cooldownDays has a default if settings failed to load and settingsId remains null
-      setCooldownDays(21); // Default value
-      setSettingsId(null); // Explicitly set to null if not found
-      // Optionally, inform the user about the loading failure, though the save action will alert them.
-      console.warn("Settings could not be loaded, using default values.");
-    }
 
     if (membersData) setMembers(membersData);
     if (datesData) setWorkDates(datesData);
@@ -209,32 +168,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // New function to save settings
-  const saveSettings = async () => {
-    if (settingsId === null) {
-      // This alert is shown if settings failed to load initially (settingsId is null)
-      alert('Einstellungen konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
-      return;
-    }
-    setIsSavingSettings(true);
-    try {
-      const { error } = await supabase
-        .from('settings')
-        .update({ cooldown_days: cooldownDays, last_updated: new Date().toISOString() })
-        .eq('id', settingsId);
-
-      if (error) throw error;
-      alert('Einstellungen wurden erfolgreich gespeichert.');
-      // Optionally, re-fetch assignments if cooldown change should be reflected immediately
-      // await fetchData();
-    } catch (err: any) {
-      alert('Fehler beim Speichern der Einstellungen: ' + err.message);
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-
   useEffect(() => {
     fetchData();
   }, []);
@@ -324,6 +257,12 @@ export default function AdminDashboard() {
             >
               Termine verwalten
             </Link>
+            <Link
+              href="/admin/settings"
+              className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-lg font-bold text-sm hover:bg-white/20 transition-all flex items-center gap-2"
+            >
+              Einstellungen
+            </Link>
             {assignments.some(a => a.status === 'Draft') ? (
               <div className="flex items-center gap-2 bg-black/20 p-1 rounded-xl border border-white/10">
                 <button
@@ -344,7 +283,7 @@ export default function AdminDashboard() {
                 <button
                   className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50"
                   onClick={generateSchedule}
-                  disabled={isGenerating || isSavingPlan || isCancelling || isSavingSettings}
+                  disabled={isGenerating || isSavingPlan || isCancelling}
                 >
                   {isGenerating ? '...' : 'Neu generieren'}
                 </button>
@@ -353,7 +292,7 @@ export default function AdminDashboard() {
               <button
                 className="bg-primary text-secondary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
                 onClick={generateSchedule}
-                disabled={isGenerating || isSavingSettings}
+                disabled={isGenerating}
               >
                 {isGenerating ? (
                   <>
@@ -489,61 +428,6 @@ export default function AdminDashboard() {
                 <p className="text-muted italic">Keine Arbeitstage gefunden. Führen Sie das Setup-Script in Supabase aus.</p>
               </div>
             )}
-          </div>
-        </section>
-
-        {/* New Settings Section */}
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3">
-              Schichtplan-Einstellungen
-            </h2>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <div className="flex flex-col md:flex-row items-center gap-4">
-              <div className="flex-grow flex items-center gap-4">
-                <div className="flex flex-col flex-grow">
-                  <div className="flex justify-between items-center mb-1">
-                    <label htmlFor="cooldown-slider" className="text-xs font-bold uppercase text-secondary/60 tracking-wider">
-                      Abkühlphase
-                    </label>
-                    <span className="text-2xl font-black text-secondary">{cooldownDays} Tage</span>
-                  </div>
-                  <input
-                    id="cooldown-slider"
-                    type="range"
-                    min="0"
-                    max="60"
-                    step="1"
-                    value={cooldownDays}
-                    onChange={(e) => setCooldownDays(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary border border-black/5"
-                  />
-                  <div className="flex justify-between text-[10px] font-bold text-muted mt-1 px-1">
-                    <span>0 TAGE</span>
-                    <span>30 TAGE</span>
-                    <span>60 TAGE</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={saveSettings}
-                disabled={isSavingSettings || isGenerating}
-                className="bg-secondary text-white px-5 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSavingSettings ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Speichert...
-                  </>
-                ) : (
-                  'Speichern'
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-muted mt-2 ml-3">
-              Nach wie vielen Tagen darf ein Mitglied wieder für denselben oder einen wichtigen/Wochenend-Dienst eingeteilt werden? (0 = keine Abkühlphase)
-            </p>
           </div>
         </section>
 
