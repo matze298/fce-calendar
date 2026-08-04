@@ -34,6 +34,8 @@ export default function ManageMembersPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const router = useRouter();
+
   const fetchData = async () => {
     setLoading(true);
 
