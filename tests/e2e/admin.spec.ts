@@ -182,6 +182,16 @@ test.describe('Admin Dashboard', () => {
     await expect(page.locator('body')).toContainText('Wichtig');
   });
 
+  test('Dashboard cards show the Veranstaltung name and start time', async ({ page }) => {
+    // GIVEN the admin dashboard with a named Veranstaltung
+    await page.goto('/admin');
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 10000 });
+
+    // THEN the card shows the name and the start time next to the date
+    await expect(page.locator('body')).toContainText('Heimspiel gegen TSV');
+    await expect(page.locator('body')).toContainText('19:00');
+  });
+
   test('Start time pre-fills from the configured weekday defaults', async ({ page }) => {
     // GIVEN the Termin-Management page
     await page.goto('/admin/dates');

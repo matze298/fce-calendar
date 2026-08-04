@@ -5,6 +5,7 @@ import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { toTimeInputValue } from '@/utils/startTime';
 
 interface Member {
   id: string;
@@ -15,6 +16,8 @@ interface Member {
 interface WorkDate {
   id: string;
   date: string;
+  name: string | null;
+  start_time: string | null;
   required_people: number;
   is_important_shift: boolean;
   is_weekend: boolean;
@@ -347,13 +350,18 @@ export default function AdminDashboard() {
                     }`}
                 >
                   <div className="flex justify-between items-start mb-3">
-                    <span className="text-lg font-bold text-secondary">
-                      {new Date(wd.date).toLocaleDateString('de-DE', {
-                        weekday: 'short',
-                        day: '2-digit',
-                        month: '2-digit'
-                      })}
-                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-lg font-bold text-secondary">
+                        {new Date(wd.date).toLocaleDateString('de-DE', {
+                          weekday: 'short',
+                          day: '2-digit',
+                          month: '2-digit'
+                        })}
+                      </span>
+                      {wd.start_time && (
+                        <span className="text-sm font-bold text-muted">{toTimeInputValue(wd.start_time)}</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       {wd.is_important_shift && (
                         <span className="bg-primary text-secondary text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
@@ -369,6 +377,12 @@ export default function AdminDashboard() {
                       </button>
                     </div>
                   </div>
+
+                  {wd.name && (
+                    <p className="text-sm font-medium text-secondary/70 mb-3 truncate" title={wd.name}>
+                      {wd.name}
+                    </p>
+                  )}
 
                   {addingToDate === wd.id && (
                     <div className="mb-4 p-2 bg-gray-50 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-1">
