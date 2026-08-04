@@ -3,6 +3,7 @@
 import json
 import os
 from datetime import UTC, datetime, timedelta
+from html import escape
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, cast
@@ -11,7 +12,7 @@ import resend
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-from api.models import Assignment
+from api.models import Assignment, WorkDate
 
 # Load environment variables
 load_dotenv(".env.local")
@@ -60,7 +61,7 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             # Fetch all published assignments with member and workdate details
             response = (
                 supabase.table("assignments")
-                .select("*, members(name, email), work_dates(date)")
+                .select("*, members(name, email), work_dates(date, name, start_time)")
                 .eq("status", "Published")
                 .execute()
             )
@@ -76,14 +77,14 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             email_override = os.getenv("DEVELOPMENT_EMAIL_OVERRIDE")
 
             for a in target_assignments:
-                if not a.members:
+                if not a.members or not a.work_dates:
                     continue
 
                 email = email_override or a.members.email
                 name = a.members.name
 
                 if email and name:
-                    self._send_reminder_email(email, name, target_date)
+                    self._send_reminder_email(email, name, a.work_dates)
                     sent_count += 1
 
             # Success Response
@@ -100,9 +101,9 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
-    def _send_reminder_email(self, to_email: str, name: str, date: str) -> None:
+    def _send_reminder_email(self, to_email: str, name: str, work_date: WorkDate) -> None:
         """Sends a branded German-language reminder email via Resend."""
-        formatted_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC).strftime("%d.%m.%Y")
+        formatted_date = datetime.strptime(work_date.date, "%Y-%m-%d").replace(tzinfo=UTC).strftime("%d.%m.%Y")
 
         # Load template from file
         template_path = Path(__file__).parent / "reminder_template.html"
@@ -110,8 +111,10 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             html_content = f.read()
 
         # Replace placeholders
-        html_content = html_content.replace("{{name}}", name)
+        html_content = html_content.replace("{{name}}", escape(name))
         html_content = html_content.replace("{{formatted_date}}", formatted_date)
+        html_content = html_content.replace("{{event_name_block}}", _event_name_block(work_date.name))
+        html_content = html_content.replace("{{time_suffix}}", _time_suffix(work_date.start_time))
 
         params = {
             "from": "FCE Kalender <info@fcegenhausen.de>",
@@ -120,3 +123,20 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
             "html": html_content,
         }
         resend.Emails.send(params)  # ty:ignore[invalid-argument-type]
+
+
+def _event_name_block(name: str | None) -> str:
+    """Renders the event name as a kicker above the date, or nothing when unnamed."""
+    if not name:
+        return ""
+    return (
+        '<p style="margin: 0 0 6px 0; font-size: 13px; font-weight: bold; color: #555; '
+        f'text-transform: uppercase; letter-spacing: 0.5px;">{escape(name)}</p>'
+    )
+
+
+def _time_suffix(start_time: str | None) -> str:
+    """Renders a start time as a suffix for the date line, or nothing when there is none."""
+    if not start_time:
+        return ""
+    return f", {start_time[:5]} Uhr"
