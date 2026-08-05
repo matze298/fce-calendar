@@ -1,10 +1,10 @@
 # Club Scheduling App - Project Blueprint (FC Egenhausen Edition)
 
 ## 1. Architecture & Tech Stack
-* **Frontend:** Next.js (React), Tailwind CSS. Configured as a PWA.
+* **Frontend:** Next.js (React), Tailwind CSS. *PWA configuration is a target, not current: no manifest exists yet.*
 * **Backend:** Vercel (Hobby Tier) + Python API routes.
 * **Database:** Supabase (PostgreSQL).
-* **Notifications:** Resend (Email), Telegram Bot, Web Push.
+* **Notifications:** Resend (Email) only. Paid channels such as SMS or WhatsApp are the fallback if email ever proves insufficient. *Web Push is a target, not current.*
 * **Language:** **German (Deutsch)** for all user-facing interfaces.
 
 ## 2. UI/UX & Brand Integration (Seamless Design)
@@ -25,16 +25,16 @@
 * *Configuration:* The cooldown period and the default start times per weekday bucket (Mon-Thu, Fri, Sat/Sun) are stored in the `settings` table and editable under `/admin/settings`.
 
 ## 4. Security & GDPR (Germany/EU Standards)
-* Strict Row Level Security (RLS) in Supabase.
+* Strict Row Level Security (RLS) in Supabase. **Target, not current.** Every table still grants `FOR ALL TO authenticated USING (true)`, and `anon` can read all member rows. See `ROADMAP.md` in the repository root, which tracks this as a blocker for holding real member data.
 * No personal data beyond name/contact/availability.
-* "Right to be forgotten" button in Admin UI.
+* "Right to be forgotten" button in Admin UI. Implemented in `app/admin/members/page.tsx`.
 * Use `.env.local` for all credentials.
 
 ## 5. Local Development
-* `supabase start` for local Docker DB.
+* `supabase start` for local Docker DB. *Target, not current: there is no `supabase/config.toml`, so this does not run yet. Develop against the hosted project instead.*
 * `npm run dev` for normal local frontend development. The script uses Webpack instead of Turbopack to avoid filesystem and HMR issues on mounted workspaces.
 * `npx vercel dev` only when testing Vercel's Python/serverless-function emulation.
-* `seed.sql` with fake club member data (e.g., "Max Mustermann").
+* Fake club member data (e.g., "Max Mustermann") is seeded by `supabase/setup.sql`, not a separate `seed.sql`. Note that the same file drops all tables first, so it is safe to run only against an empty database.
 
 ## 6. Automated Reminders (Vercel Cron Jobs)
 * **Strategy:** Use Vercel's native Cron feature to trigger a Python Serverless Function once daily at 08:00 AM CET.
@@ -42,7 +42,6 @@
 * **Security:** The endpoint MUST verify the `Authorization: Bearer <CRON_SECRET>` header provided by Vercel before executing any logic.
 * **Execution Logic:**
     1. Query Supabase for all `Assignments` with `status = 'Published'` where the associated `WorkDate` is exactly 7 days away (and/or 1 day away).
-    2. Fetch the corresponding member's `email` and `telegram_chat_id`.
+    2. Fetch the corresponding member's `email`.
     3. Use the `resend` Python SDK to fire a branded FC Egenhausen email reminder.
-    4. (Optional) Use the `requests` library to hit the Telegram Bot API `sendMessage` endpoint if the user has a chat ID.
 * **Configuration:** Add a `vercel.json` file to the project root scheduling the job using a standard cron expression (e.g., `0 7 * * *` for 8 AM CET).

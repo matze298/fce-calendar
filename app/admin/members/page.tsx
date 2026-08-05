@@ -23,7 +23,6 @@ type Member = {
 export default function ManageMembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   // New Member Form State
@@ -37,34 +36,25 @@ export default function ManageMembersPage() {
 
   const router = useRouter();
 
-  const fetchData = async () => {
-    setLoading(true);
-
-    const access = await checkAdminAccess();
-    if (access === 'unauthenticated') {
-      router.push('/login');
-      return;
-    }
-
-    if (access === 'forbidden') {
-      router.push('/admin');
-      return;
-    }
-
-    setIsAdmin(true);
-
-    const { data: membersData } = await supabase
-      .from('members')
-      .select('*')
-      .order('name');
-
-    if (membersData) setMembers(membersData);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    fetchData();
-  }, []);
+    const loadPage = async () => {
+      const access = await checkAdminAccess();
+      if (access === 'unauthenticated') {
+        router.push('/login');
+        return;
+      }
+
+      if (access === 'forbidden') {
+        router.push('/admin');
+        return;
+      }
+
+      setMembers(await fetchMembers());
+      setLoading(false);
+    };
+
+    loadPage();
+  }, [router]);
 
   const approveMember = async (id: string) => {
     const { error } = await supabase
@@ -73,7 +63,7 @@ export default function ManageMembersPage() {
       .eq('id', id);
 
     if (error) alert(error.message);
-    else fetchData();
+    else setMembers(await fetchMembers());
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -92,7 +82,7 @@ export default function ManageMembersPage() {
     if (error) {
       alert('Fehler beim Hinzufügen: ' + error.message);
     } else {
-      await fetchData();
+      setMembers(await fetchMembers());
       setNewMember({
         name: '',
         email: '',
@@ -123,7 +113,7 @@ export default function ManageMembersPage() {
       alert('Fehler beim Speichern: ' + error.message);
     } else {
       setEditingMember(null);
-      fetchData();
+      setMembers(await fetchMembers());
     }
   };
 
@@ -413,4 +403,17 @@ export default function ManageMembersPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Pure reader, outside the component because it holds no state. Keeping it out of the component
+ * also keeps it out of the reactive graph the mount effect depends on.
+ */
+async function fetchMembers(): Promise<Member[]> {
+  const { data } = await supabase
+    .from('members')
+    .select('*')
+    .order('name');
+
+  return data ?? [];
 }

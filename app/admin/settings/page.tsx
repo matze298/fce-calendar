@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults } from '@/utils/startTime';
 import { checkAdminAccess } from '@/utils/adminGuard';
+import { errorMessage } from '@/utils/errors';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -24,9 +25,7 @@ export default function SettingsPage() {
     { key: 'default_start_time_sat_sun', id: 'default-sat-sun', label: 'SAMSTAG UND SONNTAG' },
   ];
 
-  const fetchSettings = async () => {
-    setLoading(true);
-
+  const fetchSettings = useCallback(async () => {
     const access = await checkAdminAccess();
     if (access === 'unauthenticated') {
       router.push('/login');
@@ -53,11 +52,11 @@ export default function SettingsPage() {
     }
 
     setLoading(false);
-  };
+  }, [router]);
 
   useEffect(() => {
     fetchSettings();
-  }, []);
+  }, [fetchSettings]);
 
   const saveSettings = async () => {
     if (settingsId === null) {
@@ -79,7 +78,7 @@ export default function SettingsPage() {
       if (error) throw error;
       alert('Einstellungen wurden erfolgreich gespeichert.');
     } catch (err) {
-      alert('Fehler beim Speichern der Einstellungen: ' + (err instanceof Error ? err.message : String(err)));
+      alert('Fehler beim Speichern der Einstellungen: ' + errorMessage(err));
     } finally {
       setIsSaving(false);
     }

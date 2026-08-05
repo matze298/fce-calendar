@@ -24,11 +24,12 @@ test.describe('Admin Dashboard', () => {
       };
 
       const originalGetItem = window.localStorage.getItem;
-      window.localStorage.getItem = function (key) {
+      window.localStorage.getItem = function (...args: [key: string]) {
+        const [key] = args;
         if (key && (key.includes('auth-token') || key === 'supabase.auth.token')) {
           return JSON.stringify(mockSession);
         }
-        return originalGetItem.apply(this, arguments as any);
+        return originalGetItem.apply(this, args);
       };
     });
 
@@ -161,6 +162,8 @@ test.describe('Admin Dashboard', () => {
     });
 
     await page.goto('/admin');
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 15000 });
+
     const dialogPromise = page.waitForEvent('dialog');
     const generateBtn = page.getByRole('button', { name: 'Planung generieren' });
     await generateBtn.click();
@@ -362,7 +365,7 @@ test.describe('Admin Dashboard', () => {
 
     // THEN both dialogs should have been handled and the success alert should have appeared
     // Wait for the dialogs to be processed. Using a poll for dialogCount ensures async operations are complete.
-    await expect.poll(() => dialogCount).toBe(2, { timeout: 15000 });
+    await expect.poll(() => dialogCount, { timeout: 15000 }).toBe(2);
   });
 
   test('Saving the settings page stores the cooldown and all three start time defaults', async ({ page }) => {

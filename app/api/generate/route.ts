@@ -1,5 +1,28 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { errorMessage } from '@/utils/errors';
+
+/** The work date fields the assignment phases actually read. */
+type WorkDateRow = {
+  id: string;
+  required_people: number | null;
+  is_important_shift: boolean;
+  is_weekend: boolean;
+};
+
+/** A member plus the running shift count this request maintains in memory. */
+type MemberStat = {
+  id: string;
+  seniority_level: string;
+  availability: string;
+  current_shifts: number;
+};
+
+type DraftAssignment = {
+  member_id: string;
+  workdate_id: string;
+  status: 'Draft';
+};
 
 export async function POST() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -25,10 +48,10 @@ export async function POST() {
       };
     });
 
-    const newAssignments: any[] = [];
+    const newAssignments: DraftAssignment[] = [];
 
     // Helper: Assign members to a date from a filtered pool
-    const assignPool = (date: any, pool: any[]) => {
+    const assignPool = (date: WorkDateRow, pool: MemberStat[]) => {
       const needed = date.required_people || 1;
 
       // Count both published AND newly planned drafts for this date
@@ -91,8 +114,8 @@ export async function POST() {
       assignments_count: newAssignments.length
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Logic Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

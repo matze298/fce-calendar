@@ -19,7 +19,8 @@ The source of truth for the project's logic and architecture is the **[Project B
 - **`/app`**: Next.js (React) frontend and TypeScript API routes.
 - **`/api`**: Python serverless functions containing the core scheduling algorithm logic.
 - **`/supabase`**: Database schema, RLS policies, and migration scripts.
-- **`/tests/backend`**: Python unit tests for the scheduling logic using `pytest`.
+- **`/tests/api`**: Python unit tests for the scheduling logic using `pytest`.
+- **`/tests/unit`**: TypeScript unit tests for the shared `utils/` helpers using `vitest`.
 - **`/tests/e2e`**: Playwright tests for critical user journeys and UI stability.
 - **`/docs`**: Extended documentation, blueprints, and implementation guides.
 

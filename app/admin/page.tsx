@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { toTimeInputValue, parseIsoDate } from '@/utils/startTime';
 import { checkAdminAccess } from '@/utils/adminGuard';
+import { errorMessage } from '@/utils/errors';
 
 interface Member {
   id: string;
@@ -47,8 +48,7 @@ export default function AdminDashboard() {
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
   const router = useRouter();
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = useCallback(async () => {
     const access = await checkAdminAccess();
 
     if (access === 'unauthenticated') {
@@ -71,10 +71,11 @@ export default function AdminDashboard() {
 
     if (membersData) setMembers(membersData);
     if (datesData) setWorkDates(datesData);
-    if (assignData) setAssignments(assignData as any);
+    // The joined members(name) shape is not inferred from an untyped Supabase client.
+    if (assignData) setAssignments(assignData as Assignment[]);
 
     setLoading(false);
-  };
+  }, [router]);
 
   const addAssignment = async (workdateId: string, memberId: string) => {
     if (!memberId) return;
@@ -92,8 +93,8 @@ export default function AdminDashboard() {
       if (error) throw error;
       setAddingToDate(null);
       await fetchData();
-    } catch (err: any) {
-      alert('Fehler beim Hinzufügen: ' + err.message);
+    } catch (err) {
+      alert('Fehler beim Hinzufügen: ' + errorMessage(err));
     }
   };
 
@@ -106,8 +107,8 @@ export default function AdminDashboard() {
 
       if (error) throw error;
       await fetchData();
-    } catch (err: any) {
-      alert('Fehler beim Entfernen: ' + err.message);
+    } catch (err) {
+      alert('Fehler beim Entfernen: ' + errorMessage(err));
     }
   };
 
@@ -122,8 +123,8 @@ export default function AdminDashboard() {
       if (error) throw error;
       alert('Der Dienstplan wurde erfolgreich veröffentlicht.');
       await fetchData();
-    } catch (err: any) {
-      alert('Fehler beim Speichern: ' + err.message);
+    } catch (err) {
+      alert('Fehler beim Speichern: ' + errorMessage(err));
     } finally {
       setIsSavingPlan(false);
     }
@@ -140,8 +141,8 @@ export default function AdminDashboard() {
 
       if (error) throw error;
       await fetchData();
-    } catch (err: any) {
-      alert('Fehler beim Abbrechen: ' + err.message);
+    } catch (err) {
+      alert('Fehler beim Abbrechen: ' + errorMessage(err));
     } finally {
       setIsCancelling(false);
     }
@@ -159,8 +160,8 @@ export default function AdminDashboard() {
       if (error) throw error;
       alert('Der gesamte Dienstplan wurde erfolgreich zurückgesetzt.');
       await fetchData();
-    } catch (err: any) {
-      alert('Fehler beim Zurücksetzen: ' + err.message);
+    } catch (err) {
+      alert('Fehler beim Zurücksetzen: ' + errorMessage(err));
     } finally {
       setIsResetting(false);
     }
@@ -168,7 +169,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const generateSchedule = async () => {
     setIsGenerating(true);
@@ -182,7 +183,7 @@ export default function AdminDashboard() {
       let result;
       try {
         result = JSON.parse(text);
-      } catch (e) {
+      } catch {
         console.error("Failed to parse response as JSON:", text);
         throw new Error("Server antwortete mit ungültigem Format.");
       }
@@ -191,8 +192,8 @@ export default function AdminDashboard() {
 
       alert(`${result.assignments_count} Schichten wurden als Entwurf geplant.`);
       await fetchData();
-    } catch (err: any) {
-      alert('Fehler bei der Generierung: ' + err.message);
+    } catch (err) {
+      alert('Fehler bei der Generierung: ' + errorMessage(err));
     } finally {
       setIsGenerating(false);
     }
