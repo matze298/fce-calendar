@@ -1,28 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { errorMessage } from '@/utils/errors';
-
-/** The work date fields the assignment phases actually read. */
-type WorkDateRow = {
-  id: string;
-  required_people: number | null;
-  is_important_shift: boolean;
-  is_weekend: boolean;
-};
-
-/** A member plus the running shift count this request maintains in memory. */
-type MemberStat = {
-  id: string;
-  seniority_level: string;
-  availability: string;
-  current_shifts: number;
-};
-
-type DraftAssignment = {
-  member_id: string;
-  workdate_id: string;
-  status: 'Draft';
-};
+import { generateAssignments } from '@/utils/schedule';
 
 export async function POST() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -30,88 +9,38 @@ export async function POST() {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   try {
-    // 1. Fetch data
     const { data: members } = await supabase.from('members').select('*').eq('exempt', false);
     const { data: workDates } = await supabase.from('work_dates').select('*').order('date', { ascending: true });
-    const { data: existingAssignments } = await supabase.from('assignments').select('*').eq('status', 'Published');
+    const { data: publishedAssignments } = await supabase
+      .from('assignments')
+      .select('member_id, workdate_id')
+      .eq('status', 'Published');
 
     if (!members || !workDates) {
       return NextResponse.json({ error: 'Keine Mitglieder oder Arbeitstage gefunden' }, { status: 400 });
     }
 
-    // Keep track of shifts in memory, including existing published ones
-    const memberStats = members.map(m => {
-      const publishedCount = existingAssignments?.filter(a => a.member_id === m.id).length || 0;
-      return {
-        ...m,
-        current_shifts: (m.historical_shifts || 0) + publishedCount
-      };
+    // Missing settings fall back to the seeded default rather than failing the run.
+    const { data: settings } = await supabase.from('settings').select('cooldown_days').limit(1).maybeSingle();
+
+    const drafts = generateAssignments({
+      members,
+      workDates,
+      publishedAssignments: publishedAssignments ?? [],
+      cooldownDays: settings?.cooldown_days ?? 21,
     });
 
-    const newAssignments: DraftAssignment[] = [];
-
-    // Helper: Assign members to a date from a filtered pool
-    const assignPool = (date: WorkDateRow, pool: MemberStat[]) => {
-      const needed = date.required_people || 1;
-
-      // Count both published AND newly planned drafts for this date
-      const alreadyPublished = existingAssignments?.filter(a => a.workdate_id === date.id) || [];
-      const alreadyDrafted = newAssignments.filter(a => a.workdate_id === date.id);
-
-      const totalAssigned = alreadyPublished.length + alreadyDrafted.length;
-      const rem = Math.max(0, needed - totalAssigned);
-
-      if (rem <= 0) return;
-
-      // Filter pool: Remove members who are already assigned to this date (Published or Draft)
-      const availablePool = pool.filter(m =>
-        !alreadyPublished.some(a => a.member_id === m.id) &&
-        !alreadyDrafted.some(a => a.member_id === m.id)
-      );
-
-      // Fairness: Sort by current_shifts ascending
-      const sortedPool = [...availablePool].sort((a, b) => a.current_shifts - b.current_shifts);
-      const chosen = sortedPool.slice(0, rem);
-
-      chosen.forEach(m => {
-        newAssignments.push({
-          member_id: m.id,
-          workdate_id: date.id,
-          status: 'Draft'
-        });
-        // Find member in stats and increment
-        const stat = memberStats.find(s => s.id === m.id);
-        if (stat) stat.current_shifts++;
-      });
-    };
-
-    // PHASE 1: Seniors -> Important
-    workDates.filter(d => d.is_important_shift).forEach(d => {
-      assignPool(d, memberStats.filter(m => m.seniority_level === 'Senior'));
-    });
-
-    // PHASE 2: Weekends
-    workDates.filter(d => d.is_weekend && !d.is_important_shift).forEach(d => {
-      assignPool(d, memberStats.filter(m => ['Weekends', 'Any'].includes(m.availability)));
-    });
-
-    // PHASE 3: Weekdays
-    workDates.filter(d => !d.is_weekend && !d.is_important_shift).forEach(d => {
-      assignPool(d, memberStats.filter(m => ['Weekdays', 'Any'].includes(m.availability)));
-    });
-
-    // 2. Save to Supabase
-    // Clear old drafts first to avoid any conflicts with previous runs
+    // Clear old drafts first to avoid any conflicts with previous runs.
     await supabase.from('assignments').delete().eq('status', 'Draft');
 
-    if (newAssignments.length > 0) {
-      const { error: insertError } = await supabase.from('assignments').insert(newAssignments);
+    if (drafts.length > 0) {
+      const { error: insertError } = await supabase.from('assignments').insert(drafts);
       if (insertError) throw insertError;
     }
 
     return NextResponse.json({
       status: 'success',
-      assignments_count: newAssignments.length
+      assignments_count: drafts.length
     });
 
   } catch (error) {

@@ -23,7 +23,7 @@ Next.js and Vercel Serverless Functions handle backend logic. For Python devs, t
 
 | Endpoint | Implementation File | Responsibility |
 | :--- | :--- | :--- |
-| `/api/generate`| `app/api/generate/route.ts` | **Proxy Route**: Forwards requests to the Python scheduling backend (Vercel Serverless Function at `/api/generate.py`). |
+| `/api/generate`| `app/api/generate/route.ts` | Builds the draft plan. Reads members, work dates, published assignments and the cooldown setting, then delegates to `utils/schedule.ts` and writes the drafts back. |
 | `/api/cron/send_reminders` | `api/cron/send_reminders.py` | **Cron Job**: Automated daily email reminders for members with upcoming shifts. |
 
 ### 🌍 Shared Logic & Global Files

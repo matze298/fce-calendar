@@ -17,7 +17,7 @@ The source of truth for the project's logic and architecture is the **[Project B
 ## Repository Structure
 
 - **`/app`**: Next.js (React) frontend and TypeScript API routes.
-- **`/api`**: Python serverless functions containing the core scheduling algorithm logic.
+- **`/api`**: Python serverless functions. Currently the weekly reminder cron. The scheduling algorithm lives in `utils/schedule.ts`.
 - **`/supabase`**: Database schema, RLS policies, and migration scripts.
 - **`/tests/api`**: Python unit tests for the scheduling logic using `pytest`.
 - **`/tests/unit`**: TypeScript unit tests for the shared `utils/` helpers using `vitest`.
