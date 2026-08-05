@@ -18,13 +18,15 @@
 1.  **Task:** Generate the terminal commands to initialize a Git repository, commit the current local state, and provide instructions on linking the repo to Vercel via the Vercel Dashboard.
 2.  **Goal:** Establish the baseline where pushing to `main` updates the live site.
 
-### Phase 2: Python Backend Testing (`pytest`)
-* **Context:** The Python fairness algorithm (`/api/generate.py`) is the brain of the app. If it breaks, the club schedule breaks.
-1.  **Task:** Set up a directory for the Python tests. This lives at `tests/api/`, mirroring the `api/` package layout.
-2.  **Task:** Write `pytest` test cases that mock Supabase database responses.
-3.  **Required Tests:** * Verify Seniors are assigned to Important shifts.
+### Phase 2: Scheduler and Backend Testing
+* **Context:** The scheduling algorithm is the brain of the app. If it breaks, the club schedule breaks.
+1.  **Task:** The algorithm is a pure function in `utils/schedule.ts`, covered by `vitest` in `tests/unit/schedule.test.ts`. It is deliberately separated from `app/api/generate/route.ts` so it can be tested without a database or a running server.
+2.  **Task:** The remaining Python is the reminder cron, tested with `pytest` under `tests/api/`, mirroring the `api/` package layout and mocking Supabase responses.
+3.  **Required scheduler tests:** * Verify Seniors are assigned to Important shifts.
     * Verify historical shift sorting (fairness) works perfectly.
     * Verify weekend constraints are respected.
+    * Verify the cooldown holds members back, counting published assignments, and yields when that would leave a shift unstaffed.
+    * Verify published assignments count toward a date's `required_people` and are never double-booked.
 
 ### Phase 3: Database Migration CI (Supabase)
 * **Context:** We cannot break the production database. Schema changes must be tested.

@@ -16,12 +16,14 @@
 * **Typography:** Clean sans-serif (Inter or system fonts) to match the professional sports-club aesthetic.
 * **UI Pattern:** Card-based layout for mobile clarity. High-importance shifts should be visually distinguished using the primary brand color.
 
-## 3. Core Logic (The Python Algorithm)
+## 3. Core Logic (The Scheduling Algorithm)
+* **Where it lives:** `utils/schedule.ts`, a pure function unit tested in `tests/unit/schedule.test.ts`. `app/api/generate/route.ts` is the thin shell that reads from Supabase, calls it, and writes the drafts back.
 * Phase 1: Seniors -> Important Shifts.
 * Phase 2: Weekend availability -> Weekends.
 * Phase 3: General availability -> Remaining slots.
 * *Fairness:* Sort by `historical_shifts` (Ascending).
-* *Cooldown:* Members are ineligible for a new shift if they have an assignment within a 3-week window (21 days) of the target date. This is a "soft" constraint: if no members are available without violating cooldown, the pool reverts to all eligible members for that phase to ensure the shift is filled.
+* *Cooldown:* Members are ineligible for a new shift if they have an assignment within a 3-week window (21 days) of the target date, counting assignments already published as well as those planned in the same run. This is a "soft" constraint: if no members are available without violating cooldown, the pool reverts to all eligible members for that phase to ensure the shift is filled.
+* *Existing work counts:* Published assignments count toward a member's fairness total and toward a date's `required_people`, and a member already on a date is never assigned to it twice.
 * *Configuration:* The cooldown period and the default start times per weekday bucket (Mon-Thu, Fri, Sat/Sun) are stored in the `settings` table and editable under `/admin/settings`.
 
 ## 4. Security & GDPR (Germany/EU Standards)
