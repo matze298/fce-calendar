@@ -37,11 +37,11 @@
 * Fake club member data (e.g., "Max Mustermann") is seeded by `supabase/setup.sql`, not a separate `seed.sql`. Note that the same file drops all tables first, so it is safe to run only against an empty database.
 
 ## 6. Automated Reminders (Vercel Cron Jobs)
-* **Strategy:** Use Vercel's native Cron feature to trigger a Python Serverless Function once daily at 08:00 AM CET.
+* **Strategy:** Use Vercel's native Cron feature to trigger a Python Serverless Function once daily in the local morning. Vercel evaluates cron expressions in **UTC** and offers no timezone option, so a single expression cannot hold one local time all year. `0 6 * * *` is 08:00 during CEST, which covers the season the club actually schedules shifts in (May to October), and 07:00 during CET in winter.
 * **The Endpoint:** Create `/api/cron/send_reminders.py`.
 * **Security:** The endpoint MUST verify the `Authorization: Bearer <CRON_SECRET>` header provided by Vercel before executing any logic.
 * **Execution Logic:**
     1. Query Supabase for all `Assignments` with `status = 'Published'` where the associated `WorkDate` is exactly 7 days away (and/or 1 day away).
     2. Fetch the corresponding member's `email`.
     3. Use the `resend` Python SDK to fire a branded FC Egenhausen email reminder.
-* **Configuration:** Add a `vercel.json` file to the project root scheduling the job using a standard cron expression (e.g., `0 7 * * *` for 8 AM CET).
+* **Configuration:** `vercel.json` in the project root schedules the job. Note that JSON takes no comments, so the UTC reasoning above lives here rather than beside the expression.

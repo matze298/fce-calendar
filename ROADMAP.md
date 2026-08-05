@@ -129,14 +129,13 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 - **Hobby cron limits are tight:** few jobs, each roughly once per day, fired at approximately rather
   than exactly the requested time. The single daily job in `vercel.json` fits, but confirm the current
   limits before depending on the schedule
-- **The cron time drifts with daylight saving.** Vercel evaluates cron expressions in UTC and
-  `vercel.json` says `0 7 * * *`, so reminders go out at 08:00 in winter and 09:00 in summer, while
-  blueprint section 6 specifies 08:00 CET
+- **The cron fires in UTC, so no single expression holds one local time all year.** `0 6 * * *` is 08:00
+  during CEST, covering the May to October season, and 07:00 during CET. Vercel offers no timezone
+  option, so this is a choice rather than something to fix
 - **Python dependencies ship as declared.** Vercel installs from `uv.lock` or `pyproject.toml` with zero
-  configuration, so no `requirements.txt` is needed. But `pytest`, `pytest-mock`, `prek`, `ruff` and `ty`
-  are currently in the main `dependencies` array with no dev group, so they would be installed into the
-  deployment. `ruff` and `ty` are large binaries, and the serverless bundle limit is 250 MB unzipped.
-  Move them to `[dependency-groups]`
+  configuration, so no `requirements.txt` is needed. The dev tooling lives in `[dependency-groups]` so it
+  stays out of the serverless bundle, which matters against the 250 MB unzipped limit. Keep it that way
+  when adding dependencies: `[project.dependencies]` is what gets deployed
 - **A data processing agreement with Vercel** matters for a German club holding member names and email
   addresses, and availability tends to differ by plan. Settle this before real member data goes in,
   which is the same trigger as the access control work above
