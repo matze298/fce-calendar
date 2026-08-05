@@ -1,8 +1,9 @@
 # Roadmap
 
 The gap between what `docs/project_blueprint.md` and `docs/ci_cd_blueprint.md` specify and what the code
-actually does today, ordered by severity. The blueprints stay the specification, this file tracks what is
-still missing and shrinks as items close. Written 2026-08-04.
+actually does today, ordered by severity, plus the runbook for getting the app live. The blueprints stay
+the specification, this file tracks what is still missing and shrinks as items close.
+Written 2026-08-04.
 
 For what the app does and how it is built, read the blueprints and `docs/WEBAPP_GUIDE.md` instead.
 
@@ -81,6 +82,64 @@ follow-up, or the policies ship unverified.
   insufficient. Telegram was dropped from the codebase in favor of that decision
 - A working `supabase start` for local development, named in blueprint section 5. There is no
   `supabase/config.toml`
+
+## Live deployment
+
+The app is not deployed yet. No Vercel check or preview comment appears on pull requests, and the only
+registered deployments are the GitHub Pages builds of this documentation. The target is a subdomain of
+the club's existing domain.
+
+### Why a subdomain and not a subpage
+
+`fcegenhausen.de` resolves to `217.160.0.3` on IONOS nameservers (`ns*.ui-dns.*`), with club mail on
+`mx0*.ionos.de`. So the domain, DNS and email all sit at IONOS.
+
+`schichtplan.fcegenhausen.de` is one DNS record and leaves the existing site untouched.
+
+`fcegenhausen.de/schichtplan` is not achievable by DNS at all, because DNS maps names to addresses and
+has no concept of paths. Serving a path from a different host needs a reverse proxy on whatever answers
+for the apex domain, and IONOS shared hosting does not generally allow proxying to an external origin.
+The alternatives are worse: move the apex to Vercel and rewrite every non-app path back to the old site,
+or embed in an iframe, which breaks authentication cookies. Next.js `basePath` only helps once the whole
+domain is on Vercel. Link to the subdomain from the main site's navigation instead.
+
+### Steps
+
+1. Import the repository into Vercel. The Next.js framework preset is detected automatically
+2. Set the environment variables in the Vercel project: `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `RESEND_API_KEY`, `CRON_SECRET`, and leave
+   `DEVELOPMENT_EMAIL_OVERRIDE` unset. The Configuration and secrets section above is the owner of
+   this list and explains why each one matters
+3. Pin the function region to Frankfurt (`fra1`), and confirm the Supabase project is also in the EU
+4. Add `schichtplan.fcegenhausen.de` as a domain on the Vercel project
+5. In the IONOS DNS panel, add the CNAME record Vercel provides for that subdomain. **Keep IONOS as the
+   DNS provider and only add the record.** Moving the nameservers to Vercel without recreating the `MX`
+   records would silently break club email
+6. Wait for Vercel to issue the TLS certificate, then confirm the subdomain serves over HTTPS
+7. Add the production URL to the Supabase Auth redirect URLs, otherwise login redirects fail off
+   localhost
+8. Verify the reminder cron by calling the endpoint with the configured `CRON_SECRET`
+9. Link to the subdomain from the existing site's navigation
+
+### Constraints to check before relying on it
+
+- **Vercel's Hobby plan is licensed for non-commercial use.** A registered e.V. running an internal
+  member tool is a reasonable fit, but it is Vercel's judgment call rather than a documented guarantee.
+  Adding sponsorship or a shop to the same project is what would turn this into a Pro-tier question
+- **Hobby cron limits are tight:** few jobs, each roughly once per day, fired at approximately rather
+  than exactly the requested time. The single daily job in `vercel.json` fits, but confirm the current
+  limits before depending on the schedule
+- **The cron time drifts with daylight saving.** Vercel evaluates cron expressions in UTC and
+  `vercel.json` says `0 7 * * *`, so reminders go out at 08:00 in winter and 09:00 in summer, while
+  blueprint section 6 specifies 08:00 CET
+- **Python dependencies ship as declared.** Vercel installs from `uv.lock` or `pyproject.toml` with zero
+  configuration, so no `requirements.txt` is needed. But `pytest`, `pytest-mock`, `prek`, `ruff` and `ty`
+  are currently in the main `dependencies` array with no dev group, so they would be installed into the
+  deployment. `ruff` and `ty` are large binaries, and the serverless bundle limit is 250 MB unzipped.
+  Move them to `[dependency-groups]`
+- **A data processing agreement with Vercel** matters for a German club holding member names and email
+  addresses, and availability tends to differ by plan. Settle this before real member data goes in,
+  which is the same trigger as the access control work above
 
 ## After go-live
 
