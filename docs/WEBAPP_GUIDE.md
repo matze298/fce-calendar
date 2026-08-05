@@ -30,6 +30,9 @@ Next.js and Vercel Serverless Functions handle backend logic. For Python devs, t
 - **`app/layout.tsx`**: The "base template" (like a base Jinja2 template). Contains the HTML structure, fonts, and metadata that persist across all pages.
 - **`app/globals.css`**: Global TailwindCSS/Vanilla CSS styles.
 - **`utils/supabase.js`**: Initialized Supabase client (the equivalent of a `db_session` or `SQLAlchemy` engine).
+- **`utils/startTime.ts`**: Weekday bucket defaults, `TIME` value trimming, and date-only string parsing.
+- **`utils/adminGuard.ts`**: `checkAdminAccess()`, the shared admin check for the `/admin` pages. A UI convenience only, not a security boundary.
+- **`utils/errors.ts`**: `errorMessage()`, for the message of a caught value that may not be an `Error`.
 - **`next.config.ts`**: Framework configuration (similar to `pyproject.toml` or `settings.py`).
 
 ## 🧠 Key Concepts for Python Developers

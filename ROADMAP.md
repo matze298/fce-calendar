@@ -12,8 +12,8 @@ For what the app does and how it is built, read the blueprints and `docs/WEBAPP_
   by `supabase/setup.sql`)
 - `.env.local` ships with placeholder credentials (`mock.supabase.co`, `mock-key`), so a fresh checkout
   cannot log in until real values are filled in. See `DEVELOPER.md` section 3
-- CI runs pytest with ruff and ty, Playwright E2E, Supabase migration verification, and a frontend build
-  with type check
+- CI gates every PR on pytest with ruff and ty, Playwright E2E, Supabase migration verification, and
+  frontend lint, type check, unit tests and build
 - The Playwright suite mocks the entire Supabase layer, so **no test exercises real authentication or
   real Row Level Security**. Everything in the access control section below is invisible to CI
 
@@ -57,6 +57,11 @@ Blueprint section 4 requires strict RLS. None of it is in place.
 Sequencing note: a policy on `members` that queries `members` recurses. The usual fixes are a
 `SECURITY DEFINER` helper or moving `is_admin` into the JWT app metadata. That choice is still open.
 
+Verification note: nothing tests the policies, and nothing can with the current setup, because the
+Playwright suite mocks Supabase entirely. This work needs its own harness, for example a psql script
+asserting each role's reach against a throwaway Postgres. Treat that as part of the task, not a
+follow-up, or the policies ship unverified.
+
 ### Configuration and secrets
 
 - Real Supabase URL and anon key in Vercel and in each developer's `.env.local`
@@ -67,16 +72,6 @@ Sequencing note: a policy on `members` that queries `members` recurses. The usua
   that one address
 - Supabase Auth redirect URLs for the production hostname. See `DEVELOPER.md` section 4
 - Secret scanning in CI, required by ci_cd blueprint section 5
-
-### Quality gates
-
-- `npm run lint` reports 15 errors and 7 warnings. Most are `@typescript-eslint/no-explicit-any` and
-  `react-hooks/set-state-in-effect`, the latter across all four admin pages, so gating CI on lint means
-  refactoring the admin data loading first. Until then the frontend job runs type check and build only
-- No unit tests for frontend code. `utils/startTime.ts` and `utils/adminGuard.ts` are covered only
-  indirectly through E2E. Vitest, named in ci_cd blueprint section 2, is not installed
-- Nothing verifies Row Level Security. Because E2E mocks Supabase, policy work needs its own harness,
-  for example a psql script asserting each role against a throwaway Postgres
 
 ### Features specified but not built
 

@@ -24,11 +24,12 @@ test.describe('Admin Dashboard', () => {
       };
 
       const originalGetItem = window.localStorage.getItem;
-      window.localStorage.getItem = function (key) {
+      window.localStorage.getItem = function (...args: [key: string]) {
+        const [key] = args;
         if (key && (key.includes('auth-token') || key === 'supabase.auth.token')) {
           return JSON.stringify(mockSession);
         }
-        return originalGetItem.apply(this, arguments as any);
+        return originalGetItem.apply(this, args);
       };
     });
 

@@ -3,16 +3,14 @@
 ## 1. CI/CD Architecture & Philosophy
 * **Version Control:** GitHub.
 * **Branching Strategy:** Feature branches (e.g., `feature/new-ui`) merge into `main` via Pull Requests (PRs). **Never push directly to main.**
-* **Continuous Deployment (CD):** Handled natively by Vercel.
-    * Every PR generates a temporary Vercel Preview URL.
-    * Every merge to `main` auto-deploys to Production.
-* **Continuous Integration (CI):** Handled by GitHub Actions. Runs automatically on every PR to ensure code quality, test the Python algorithm, and verify database migrations.
+* **Continuous Deployment (CD):** Intended to be handled natively by Vercel, with a preview URL per PR and production on merge to `main`. **Target, not current:** no Vercel check or preview comment appears on pull requests, and the only registered deployments are the GitHub Pages builds of this documentation, so the app does not appear to be deployed yet.
+* **Continuous Integration (CI):** Handled by GitHub Actions. Four workflows run on every PR: backend tests, frontend checks, E2E, and database migration verification.
 
 ## 2. The Tool Stack
-* **Frontend Testing:** `Playwright` (for End-to-End browser testing). *`Vitest` for component testing is a target, not current: it is not installed, and there are no frontend unit tests.*
+* **Frontend Testing:** `Vitest` (for unit tests of the shared helpers in `utils/`, under `tests/unit/`) and `Playwright` (for End-to-End browser testing). *Component tests are a target, not current: there are none yet.*
 * **Backend/Algorithm Testing:** `pytest` (for the Python fairness logic) and `ty` (for Python type checking).
 * **Database CI:** Supabase GitHub Actions (to verify migrations apply cleanly).
-* **Linting/Formatting:** `ESLint` and `Ruff`. *`Prettier` is a target, not current: it is not configured.*
+* **Linting/Formatting:** `ESLint` and `Ruff`, both gating CI. *`Prettier` is a target, not current: it is not configured.*
 
 ## 3. Implementation Phases (For the AI Agent)
 
@@ -41,11 +39,11 @@
     * Navigating to the "Member List" and verifying data renders.
     * Clicking "Generate Schedule" and verifying the UI updates without crashing.
 
-### Phase 5: Frontend Build & Type Gating
-* **Context:** A page referencing an undeclared hook once broke `npm run build` and reached `main`, because no job compiled the frontend.
-1.  **Task:** `.github/workflows/frontend-checks.yml` runs `npx tsc --noEmit` and `npm run build` on every PR.
-2.  **Deliberately excluded:** `npm run lint`. It reports pre-existing errors, mostly `no-explicit-any` and `react-hooks/set-state-in-effect` across the admin pages, so gating on it requires refactoring first. Tracked in `ROADMAP.md`.
+### Phase 5: Frontend Gating (lint, types, unit tests, build)
+* **Context:** A page referencing an undeclared hook once broke `npm run build` and reached `main`, because no job checked the frontend at all.
+1.  **Task:** `.github/workflows/frontend-checks.yml` runs `npm run lint`, `npx tsc --noEmit`, `npm run test:unit` and `npm run build` on every PR.
+2.  **Note on the effect rules:** `react-hooks/set-state-in-effect` (plugin v7, compiler based) rejects a mount effect whose call graph reaches a second memoized callback that sets state. The shape it accepts is a plain reader function outside the component plus a single state-setting site, which is why the admin pages load data that way.
 
-## 5. Security Check (GDPR)
+## 4. Security Check (GDPR)
 * The CI pipeline must include a step to check for leaked secrets (API keys) in the codebase. **Target, not current:** no such step exists.
 * Ensure test data used in `pytest` and Playwright uses fake German names (e.g., "Max Mustermann") and never pulls from the live production database.

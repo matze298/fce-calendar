@@ -21,7 +21,6 @@ type WorkDate = {
 export default function ManageDatesPage() {
   const [workDates, setWorkDates] = useState<WorkDate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // Form State
   const [selectedDate, setSelectedDate] = useState('');
@@ -35,55 +34,29 @@ export default function ManageDatesPage() {
 
   const router = useRouter();
 
-  const loadPage = async () => {
-    setLoading(true);
-
-    const access = await checkAdminAccess();
-    if (access === 'unauthenticated') {
-      router.push('/login');
-      return;
-    }
-
-    if (access === 'forbidden') {
-      router.push('/admin');
-      return;
-    }
-
-    setIsAdmin(true);
-
-    // The form pre-fills from the defaults, so both reads have to land before the page is usable.
-    await Promise.all([fetchDates(), fetchTimeDefaults()]);
-
-    setLoading(false);
-  };
-
-  const fetchDates = async () => {
-    const { data } = await supabase
-      .from('work_dates')
-      .select('*')
-      .order('date', { ascending: true });
-
-    if (data) setWorkDates(data);
-  };
-
-  const fetchTimeDefaults = async () => {
-    const { data, error } = await supabase
-      .from('settings')
-      .select('*')
-      .limit(1)
-      .single();
-
-    if (error) {
-      console.error('Error fetching settings:', error.message);
-      return;
-    }
-
-    if (data) setTimeDefaults(readStartTimeDefaults(data));
-  };
-
   useEffect(() => {
+    const loadPage = async () => {
+      const access = await checkAdminAccess();
+      if (access === 'unauthenticated') {
+        router.push('/login');
+        return;
+      }
+
+      if (access === 'forbidden') {
+        router.push('/admin');
+        return;
+      }
+
+      // The form pre-fills from the defaults, so both reads have to land before the page is usable.
+      const [dates, defaults] = await Promise.all([fetchDates(), fetchTimeDefaults()]);
+
+      setWorkDates(dates);
+      setTimeDefaults(defaults);
+      setLoading(false);
+    };
+
     loadPage();
-  }, []);
+  }, [router]);
 
   const resetForm = () => {
     setSelectedDate('');
@@ -134,7 +107,7 @@ export default function ManageDatesPage() {
     if (error) {
       alert('Fehler beim Speichern: ' + error.message);
     } else {
-      await fetchDates();
+      setWorkDates(await fetchDates());
       resetForm();
     }
     setIsSubmitting(false);
@@ -149,7 +122,7 @@ export default function ManageDatesPage() {
       .eq('id', id);
 
     if (error) alert(error.message);
-    else fetchDates();
+    else setWorkDates(await fetchDates());
   };
 
   if (loading) return <div className="p-8 text-center animate-pulse">Lade Kalender...</div>;
@@ -322,4 +295,33 @@ export default function ManageDatesPage() {
       </main>
     </div>
   );
+}
+
+/**
+ * Pure readers, outside the component because they hold no state. Keeping them out of the
+ * component also keeps them out of its reactive graph, which is what lets the mount effect
+ * stay a single setState site.
+ */
+async function fetchDates(): Promise<WorkDate[]> {
+  const { data } = await supabase
+    .from('work_dates')
+    .select('*')
+    .order('date', { ascending: true });
+
+  return data ?? [];
+}
+
+async function fetchTimeDefaults(): Promise<StartTimeDefaults> {
+  const { data, error } = await supabase
+    .from('settings')
+    .select('*')
+    .limit(1)
+    .single();
+
+  if (error) {
+    console.error('Error fetching settings:', error.message);
+    return START_TIME_FALLBACKS;
+  }
+
+  return readStartTimeDefaults(data);
 }
