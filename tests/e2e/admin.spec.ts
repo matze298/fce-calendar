@@ -478,6 +478,17 @@ test.describe('Admin Dashboard', () => {
       }
     });
 
+    // GIVEN the registration's DELETE is captured, leaving its GET to the beforeEach handler
+    let deletedRegistrationUrl: string | null = null;
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'DELETE') {
+        deletedRegistrationUrl = route.request().url();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
     await page.goto('/admin/members');
     await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
 
@@ -496,5 +507,58 @@ test.describe('Admin Dashboard', () => {
       email: 'neu@example.de',
       is_approved: true,
     });
+
+    // AND the resolved claim is removed from the registrations table
+    await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
+    expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
+  });
+
+  test('A failed member update leaves the registration claim unresolved and alerts the admin', async ({ page }) => {
+    // GIVEN the member update fails, the realistic shape of a members.email unique collision
+    await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
+      if (route.request().method() === 'PATCH') {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: '23505',
+            message: 'duplicate key value violates unique constraint "members_email_key"',
+          }),
+        });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN any DELETE to the registrations table is captured, leaving its GET to the beforeEach handler
+    let deleteCalled = false;
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'DELETE') {
+        deleteCalled = true;
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN the admin's alert dialog is observed
+    let alertMessage: string | null = null;
+    page.on('dialog', async dialog => {
+      alertMessage = dialog.message();
+      await dialog.accept();
+    });
+
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // WHEN linking to the suggestion and the update fails
+    await page.getByRole('button', { name: /Max Mustermann/ }).click();
+
+    // THEN the admin is told the link failed
+    await expect.poll(() => alertMessage, { timeout: 15000 }).not.toBeNull();
+    expect(alertMessage).toContain('Verknüpfen fehlgeschlagen');
+
+    // AND the claim survives, since it is never deleted when the update failed
+    expect(deleteCalled).toBe(false);
   });
 });
