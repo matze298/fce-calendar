@@ -1,0 +1,15 @@
+# Configuration for the secret scan in .github/workflows/secret-scan.yml.
+# The default gitleaks rules are kept in full and only narrowed by the allowlist below.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholder, not a credential"
+# Matched against the extracted secret, which is gitleaks' default target. DEVELOPER.md shows how
+# to call the reminder endpoint, and the curl-auth-header rule reads the placeholder token in that
+# example as a real bearer secret. Allowlisting the exact placeholder leaves the rule active for
+# every other value, in that file and elsewhere.
+regexes = [
+  '''^your-cron-secret$''',
+]

@@ -64,7 +64,7 @@ The system uses a two-stage approval process:
 - **Admin Status:** Only users with `is_admin = true` can access the dashboard and generate shifts.
 
 ## 5. Algorithm (Shift Generator)
-The planning logic is located in `app/api/generate/route.ts` (TypeScript) and `api/generate.py` (Python reference).
+The planning logic lives in `utils/schedule.ts` as a pure function, unit tested in `tests/unit/schedule.test.ts`. `app/api/generate/route.ts` is the thin route around it that reads from Supabase and writes the drafts back.
 Assignments occur in 3 phases:
 1. **Seniors:** Priority for "Important" shifts.
 2. **Weekends:** Assigned based on weekend availability.
