@@ -1,8 +1,8 @@
 name: E2E Tests (Playwright)
 
 on:
+  # No base-branch filter, so a pull request stacked on another branch is still checked.
   pull_request:
-    branches: [ main ]
   push:
     branches: [ main ]
 

@@ -47,5 +47,5 @@
 2.  **Note on the effect rules:** `react-hooks/set-state-in-effect` (plugin v7, compiler based) rejects a mount effect whose call graph reaches a second memoized callback that sets state. The shape it accepts is a plain reader function outside the component plus a single state-setting site, which is why the admin pages load data that way.
 
 ## 4. Security Check (GDPR)
-* The CI pipeline must include a step to check for leaked secrets (API keys) in the codebase. **Target, not current:** no such step exists.
+* The CI pipeline checks for leaked secrets on every PR via `.github/workflows/secret-scan.yml`, which runs `gitleaks` over the full git history so a credential that was committed and later removed is still caught. `.gitleaks.toml` keeps the default rules and allowlists only the placeholder bearer token in `DEVELOPER.md`.
 * Ensure test data used in `pytest` and Playwright uses fake German names (e.g., "Max Mustermann") and never pulls from the live production database.

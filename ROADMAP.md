@@ -31,8 +31,8 @@ address entered into it, not a go-live date.
 - No backup or restore procedure for the Supabase project
 - No data retention policy. The "right to be forgotten" button required by blueprint section 4 does
   exist (`app/admin/members/page.tsx:130`), but nothing defines how long data is kept otherwise
-- `api/generate.py` deletes all Draft assignments then inserts the new ones with no transaction, so a
-  failure between the two leaves an empty plan
+- `app/api/generate/route.ts` deletes all Draft assignments then inserts the new ones with no
+  transaction, so a failure between the two leaves an empty plan
 
 ### Access control
 
@@ -45,8 +45,8 @@ Blueprint section 4 requires strict RLS. None of it is in place.
 - **`anon` can read every member,** names and email addresses included, and the anon key is public by
   design once the app is deployed. This is the GDPR exposure
 - **`anon` can insert and delete assignments,** so anyone can wipe or forge the published schedule
-- **Server side functions authenticate with the anon key,** not a service role key (`api/generate.py`,
-  `api/cron/send_reminders.py`, `app/api/generate/route.ts`). They are indistinguishable from a browser
+- **Server side functions authenticate with the anon key,** not a service role key
+  (`api/cron/send_reminders.py`, `app/api/generate/route.ts`). They are indistinguishable from a browser
   visitor, which is what forces the permissive policies above. Adding `SUPABASE_SERVICE_ROLE_KEY` and
   using it server side is a prerequisite for tightening anything else
 - Registration claims an existing row by email. `app/register/page.tsx` runs
@@ -72,7 +72,8 @@ follow-up, or the policies ship unverified.
 - `DEVELOPMENT_EMAIL_OVERRIDE` must be unset in production, or every reminder for every member goes to
   that one address
 - Supabase Auth redirect URLs for the production hostname. See `DEVELOPER.md` section 4
-- Secret scanning in CI, required by ci_cd blueprint section 5
+- GitHub's native secret scanning with push protection, a repository setting that blocks a push
+  containing a credential. The CI gitleaks job catches one after the fact, which is weaker
 
 ### Features specified but not built
 
