@@ -80,6 +80,28 @@ test.describe('Admin Dashboard', () => {
       }
     });
 
+    // GIVEN one pending registration whose name typos an existing seeded member
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'reg-1',
+              auth_id: 'auth-reg-1',
+              email: 'neu@example.de',
+              first_name: 'Mak',
+              last_name: 'Mustermann',
+              created_at: new Date().toISOString(),
+            },
+          ]),
+        });
+      } else {
+        await route.fulfill({ status: 204 });
+      }
+    });
+
     // GIVEN mocked work dates
     await page.route(url => url.href.includes('/rest/v1/work_dates'), async (route) => {
       await route.fulfill({
@@ -442,5 +464,37 @@ test.describe('Admin Dashboard', () => {
     // THEN both optional fields were sent as null rather than as empty strings
     await expect.poll(() => capturedBody).not.toBeNull();
     expect(capturedBody).toMatchObject({ name: null, start_time: null });
+  });
+
+  test('Admin sees a ranked suggestion for a pending registration and can link it', async ({ page }) => {
+    // GIVEN the members page with one pending registration
+    let capturedLink: Record<string, unknown> | null = null;
+    await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
+      if (route.request().method() === 'PATCH') {
+        capturedLink = route.request().postDataJSON();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // THEN the claimed name and a suggestion for the typo'd member are both shown
+    await expect(page.locator('body')).toContainText('Mak Mustermann');
+    await expect(page.locator('body')).toContainText('Max Mustermann');
+    await expect(page.locator('body')).toContainText('ähnlich');
+
+    // WHEN linking to the suggestion
+    await page.getByRole('button', { name: /Max Mustermann/ }).click();
+
+    // THEN the member row is claimed with the registration's auth id and email
+    await expect.poll(() => capturedLink, { timeout: 15000 }).not.toBeNull();
+    expect(capturedLink).toMatchObject({
+      auth_id: 'auth-reg-1',
+      email: 'neu@example.de',
+      is_approved: true,
+    });
   });
 });

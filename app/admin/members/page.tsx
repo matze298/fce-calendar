@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { checkAdminAccess } from '@/utils/adminGuard';
+import { findMemberCandidates, type MatchSuggestion } from '@/utils/memberMatch';
 
 type Member = {
   id: string;
@@ -20,8 +21,18 @@ type Member = {
   exempt?: boolean;
 };
 
+type Registration = {
+  id: string;
+  auth_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  created_at: string;
+};
+
 export default function ManageMembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
@@ -49,7 +60,13 @@ export default function ManageMembersPage() {
         return;
       }
 
-      setMembers(await fetchMembers());
+      const [loadedMembers, loadedRegistrations] = await Promise.all([
+        fetchMembers(),
+        fetchRegistrations(),
+      ]);
+
+      setMembers(loadedMembers);
+      setRegistrations(loadedRegistrations);
       setLoading(false);
     };
 
@@ -64,6 +81,70 @@ export default function ManageMembersPage() {
 
     if (error) alert(error.message);
     else setMembers(await fetchMembers());
+  };
+
+  const linkRegistration = async (registration: Registration, memberId: string) => {
+    const { error } = await supabase
+      .from('members')
+      .update({
+        auth_id: registration.auth_id,
+        email: registration.email,
+        is_approved: true,
+      })
+      .eq('id', memberId);
+
+    if (error) {
+      alert('Verknüpfen fehlgeschlagen: ' + error.message);
+      return;
+    }
+
+    await supabase.from('registrations').delete().eq('id', registration.id);
+
+    const [loadedMembers, loadedRegistrations] = await Promise.all([
+      fetchMembers(),
+      fetchRegistrations(),
+    ]);
+    setMembers(loadedMembers);
+    setRegistrations(loadedRegistrations);
+  };
+
+  const createMemberFromRegistration = async (registration: Registration) => {
+    const { error } = await supabase.from('members').insert({
+      auth_id: registration.auth_id,
+      email: registration.email,
+      name: `${registration.first_name} ${registration.last_name}`,
+      is_approved: true,
+      is_admin: false,
+    });
+
+    if (error) {
+      alert('Anlegen fehlgeschlagen: ' + error.message);
+      return;
+    }
+
+    await supabase.from('registrations').delete().eq('id', registration.id);
+
+    const [loadedMembers, loadedRegistrations] = await Promise.all([
+      fetchMembers(),
+      fetchRegistrations(),
+    ]);
+    setMembers(loadedMembers);
+    setRegistrations(loadedRegistrations);
+  };
+
+  const rejectRegistration = async (registration: Registration) => {
+    if (!confirm(`Registrierung von ${registration.first_name} ${registration.last_name} ablehnen?`)) {
+      return;
+    }
+
+    const { error } = await supabase.from('registrations').delete().eq('id', registration.id);
+
+    if (error) {
+      alert('Ablehnen fehlgeschlagen: ' + error.message);
+      return;
+    }
+
+    setRegistrations(await fetchRegistrations());
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -220,6 +301,102 @@ export default function ManageMembersPage() {
 
           {/* Pending & Approved Members List */}
           <div className="lg:col-span-2 space-y-12">
+            {registrations.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3 mb-6">
+                  Ausstehende Registrierungen
+                  <span className="ml-2 bg-secondary text-white text-[10px] px-2 py-0.5 rounded-full align-middle">
+                    {registrations.length}
+                  </span>
+                </h2>
+                <div className="space-y-3">
+                  {registrations.map((registration) => {
+                    const suggestions = findMemberCandidates(
+                      {
+                        firstName: registration.first_name,
+                        lastName: registration.last_name,
+                        email: registration.email,
+                      },
+                      members,
+                    );
+
+                    return (
+                      <div
+                        key={registration.id}
+                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"
+                      >
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div>
+                            <p className="font-bold text-secondary">
+                              {registration.first_name} {registration.last_name}
+                            </p>
+                            <p className="text-xs text-muted">{registration.email}</p>
+                          </div>
+                          <button
+                            onClick={() => rejectRegistration(registration)}
+                            className="text-xs font-bold text-red-600 hover:underline"
+                          >
+                            Ablehnen
+                          </button>
+                        </div>
+
+                        {suggestions.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-[10px] uppercase font-bold text-muted">
+                              Mögliche Zuordnung
+                            </p>
+                            {suggestions.map((suggestion) => (
+                              <button
+                                key={suggestion.member.id}
+                                onClick={() => linkRegistration(registration, suggestion.member.id)}
+                                className="w-full text-left p-2 rounded-lg border-2 border-gray-100 hover:border-primary transition-colors"
+                              >
+                                <span className="font-bold text-secondary text-sm">
+                                  {suggestion.member.name}
+                                </span>
+                                <span className="text-xs text-muted">
+                                  {' '}
+                                  · {suggestion.member.historical_shifts} Dienste ·{' '}
+                                  {suggestion.member.email} · {suggestionLabel(suggestion)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-xs text-muted italic">
+                            Kein passender Eintrag gefunden.
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                          <select
+                            defaultValue=""
+                            onChange={(e) => {
+                              if (e.target.value) linkRegistration(registration, e.target.value);
+                            }}
+                            className="flex-grow p-2 border rounded-lg text-sm"
+                          >
+                            <option value="">Manuell zuordnen ...</option>
+                            {members.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} ({m.email})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => createMemberFromRegistration(registration)}
+                            className="bg-secondary text-white px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all"
+                          >
+                            Als neues Mitglied anlegen
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
             {pendingMembers.length > 0 && (
               <section className="bg-primary/10 p-6 rounded-2xl border-2 border-primary border-dashed">
                 <h2 className="text-xl font-bold text-secondary mb-4 flex items-center gap-2">
@@ -416,4 +593,20 @@ async function fetchMembers(): Promise<Member[]> {
     .order('name');
 
   return data ?? [];
+}
+
+async function fetchRegistrations(): Promise<Registration[]> {
+  const { data } = await supabase
+    .from('registrations')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  return data ?? [];
+}
+
+/** How a suggestion earned its place, for the admin deciding whether to trust it. */
+function suggestionLabel(suggestion: MatchSuggestion): string {
+  if (suggestion.reason === 'exact-email') return 'E-Mail identisch';
+  if (suggestion.reason === 'exact-name') return 'Name identisch';
+  return `ähnlich (${Math.round(suggestion.score * 100)}%)`;
 }
