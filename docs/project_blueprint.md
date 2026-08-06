@@ -31,6 +31,8 @@
 * No personal data beyond name/contact/availability.
 * "Right to be forgotten" button in Admin UI. Implemented in `app/admin/members/page.tsx`.
 * Use `.env.local` for all credentials.
+* **Registration:** Anyone can create an account. Registration collects Vorname and Nachname and writes a claim to the `registrations` table. It never creates or modifies a member row, so a self-asserted name cannot inherit an existing member's record.
+* **Linking:** An administrator resolves each claim on `/admin/members`, either linking it to an existing member from a ranked list of suggestions or creating a new member.
 
 ## 5. Local Development
 * `supabase start` for local Docker DB. *Target, not current: there is no `supabase/config.toml`, so this does not run yet. Develop against the hosted project instead.*
