@@ -46,6 +46,8 @@ export default function RegisterPage() {
     }
 
     const authId = signUpData.user?.id;
+    const claimWriteFailedMessage =
+      'Konto erstellt, aber die Registrierung konnte nicht gespeichert werden. Bitte wenden Sie sich an den Vorstand.';
 
     if (authId) {
       const { error: claimError } = await supabase.from('registrations').insert({
@@ -64,12 +66,17 @@ export default function RegisterPage() {
       }
 
       if (claimError) {
-        setError(
-          'Konto erstellt, aber die Registrierung konnte nicht gespeichert werden. Bitte wenden Sie sich an den Vorstand.',
-        );
+        setError(claimWriteFailedMessage);
         setLoading(false);
         return;
       }
+    } else {
+      // signUp succeeded but returned no user id, so there is nothing to write a claim for. The
+      // auth user still exists with no claim for an admin to find, the same dead end as a failed
+      // claim write.
+      setError(claimWriteFailedMessage);
+      setLoading(false);
+      return;
     }
 
     setSuccess(true);
