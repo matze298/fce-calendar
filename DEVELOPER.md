@@ -77,6 +77,19 @@ Add the following to your `.env.local`:
 - `CRON_SECRET`: A random string (e.g., `super-secret-123`). In production, Vercel provides this automatically.
 - `RESEND_API_KEY`: Your API key from [Resend](https://resend.com).
 - `DEVELOPMENT_EMAIL_OVERRIDE` (Optional): Set this to your own email address to redirect **all** reminder emails to yourself during testing, regardless of the member's email in the database.
+- `REMINDERS_LIVE` (Production only): Set to `true` to allow reminders to reach the addresses stored in the `members` table.
+
+### Who actually receives a reminder
+
+The endpoint reports which mode it ran in, so a cron run can be audited from its response:
+
+| Configuration | Mode | Recipients |
+| :--- | :--- | :--- |
+| `DEVELOPMENT_EMAIL_OVERRIDE` set | `override` | Only that one address |
+| `REMINDERS_LIVE=true` | `live` | The members' own addresses |
+| Neither | `dry-run` | Nobody. The run reports what it suppressed |
+
+The default sends nothing on purpose. Reaching real addresses has to be asked for, because any database seeded from `supabase/setup.sql` is full of plausible member records, and a default that mailed whatever the table contained would send club reminders to strangers from a developer's machine.
 
 ### Local Testing
 To trigger the reminder script manually without waiting for the schedule:

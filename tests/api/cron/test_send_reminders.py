@@ -1,5 +1,6 @@
 """Tests for the send reminders functionality."""
 
+import json
 import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import ANY, MagicMock, patch
@@ -28,7 +29,8 @@ class TestHandler:
             ]
         )
         # GIVEN mocked env content
-        mock_secrets = {"CRON_SECRET": "test_secret", "RESEND_API_KEY": "test_key"}
+        # REMINDERS_LIVE opts in to mailing real member addresses, which is off by default.
+        mock_secrets = {"CRON_SECRET": "test_secret", "RESEND_API_KEY": "test_key", "REMINDERS_LIVE": "true"}
 
         # GIVEN a mocked Email-sender function
         # GIVEN a patched supabase-client, Emails send function and getenv
@@ -55,6 +57,79 @@ class TestHandler:
 
             # THEN the request sended a response with code 200
             h.send_response.assert_called_with(200)
+
+    def _run_with_env(self, env: dict[str, str]) -> MagicMock:
+        """Runs one due reminder through the handler under the given environment."""
+        target_date = (datetime.now(tz=UTC) + timedelta(days=7)).strftime("%Y-%m-%d")
+        database_return = MagicMock(
+            data=[
+                {
+                    "member_id": "1",
+                    "workdate_id": "101",
+                    "members": {"name": "Thomas Müller", "email": "thomas@mueller.de"},
+                    "work_dates": {"date": target_date, "name": "Sommerfest", "start_time": "15:30:00"},
+                    "status": "Published",
+                }
+            ]
+        )
+
+        with (
+            patch("api.cron.send_reminders._get_supabase_client") as mock_supabase_factory,
+            patch.dict(os.environ, {"CRON_SECRET": "test_secret", **env}, clear=True),
+        ):
+            h = MagicMock(spec=handler)
+            h.headers = MagicMock()
+            h.wfile = MagicMock()
+            h.headers.get.return_value = "Bearer test_secret"
+            mock_supabase_factory.return_value.table().select().eq().execute.return_value = database_return
+
+            handler._process_request(h)
+
+        return h
+
+    def test_sends_nothing_when_live_sending_is_not_enabled(self) -> None:
+        """Tests that the default configuration mails nobody."""
+        # GIVEN an environment with neither an override address nor live sending enabled,
+        # and a member whose address is at a real third-party domain, as the seed data has
+        # WHEN processing the request
+        h = self._run_with_env({})
+
+        # THEN no mail is sent, because reaching real addresses has to be asked for explicitly
+        h._send_reminder_email.assert_not_called()
+
+        # THEN the run still succeeds and reports what it suppressed, so a cron run stays auditable
+        h.send_response.assert_called_with(200)
+        payload = json.loads(h.wfile.write.call_args[0][0])
+        assert payload["mode"] == "dry-run"
+        assert payload["sent_reminders"] == 0
+        assert payload["suppressed_reminders"] == 1
+
+    def test_redirects_every_mail_to_the_override_address(self) -> None:
+        """Tests that the development override never reaches the member's own address."""
+        # GIVEN an override address configured
+        # WHEN processing the request
+        h = self._run_with_env({"DEVELOPMENT_EMAIL_OVERRIDE": "developer@example.com"})
+
+        # THEN the mail goes to the override, not to the member
+        h._send_reminder_email.assert_called_once()
+        assert h._send_reminder_email.call_args[0][0] == "developer@example.com"
+
+        payload = json.loads(h.wfile.write.call_args[0][0])
+        assert payload["mode"] == "override"
+        assert payload["sent_reminders"] == 1
+
+    def test_reaches_the_member_address_only_when_live_sending_is_enabled(self) -> None:
+        """Tests that the explicit opt-in is what unlocks real member addresses."""
+        # GIVEN live sending explicitly enabled
+        # WHEN processing the request
+        h = self._run_with_env({"REMINDERS_LIVE": "true"})
+
+        # THEN the member's own address is used
+        h._send_reminder_email.assert_called_once()
+        assert h._send_reminder_email.call_args[0][0] == "thomas@mueller.de"
+
+        payload = json.loads(h.wfile.write.call_args[0][0])
+        assert payload["mode"] == "live"
 
     def test_unauthorized_request(self) -> None:
         """Tests that unauthorized requests are rejected."""

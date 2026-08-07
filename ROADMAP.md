@@ -72,9 +72,16 @@ follow-up, or the policies ship unverified.
 - Real Supabase URL and anon key in Vercel and in each developer's `.env.local`
 - `CRON_SECRET` actually set in Vercel. The endpoint now refuses to run when it is unset, so a missing
   secret fails closed rather than accepting `Bearer None`
-- Resend domain verification for the `info@fcegenhausen.de` sender
+- Resend domain verification for the `info@fcegenhausen.de` sender, without which every reminder is
+  rejected at the provider
+- `REMINDERS_LIVE=true` in Vercel, and nowhere else. Reminders send to nobody until it is set, so
+  go-live needs it, and a preview or development environment must never have it. Vercel environment
+  variables are per-environment for exactly this reason
 - `DEVELOPMENT_EMAIL_OVERRIDE` must be unset in production, or every reminder for every member goes to
   that one address
+- Custom SMTP for Supabase Auth, pointed at Resend. The built-in sender is development-only and capped
+  at a handful of confirmation emails per hour, so registration fails with `email rate limit exceeded`
+  the moment more than a few people sign up on the same day
 - Supabase Auth redirect URLs for the production hostname. See `DEVELOPER.md` section 4
 - GitHub's native secret scanning with push protection, a repository setting that blocks a push
   containing a credential. The CI gitleaks job catches one after the fact, which is weaker
