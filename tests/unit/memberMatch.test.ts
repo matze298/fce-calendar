@@ -80,15 +80,15 @@ function candidate(
 }
 
 const MEMBERS: MemberCandidate[] = [
-  candidate('1', 'Thomas Müller', 'thomas@mueller.de', 8),
-  candidate('2', 'Sabine Schmidt', 'sabine@schmidt.de', 5),
-  candidate('3', 'Anna Fischer', 'anna@fischer.de', 0),
+  candidate('1', 'Thomas Müller', 'thomas@example.com', 8),
+  candidate('2', 'Sabine Schmidt', 'sabine@example.com', 5),
+  candidate('3', 'Anna Fischer', 'anna@example.com', 0),
 ];
 
 describe('findMemberCandidates', () => {
   it('ranks an exact email match top and labels it as such', () => {
     // GIVEN a claim whose email matches a member exactly, but whose name does not
-    const claim = { firstName: 'Tom', lastName: 'Miller', email: 'thomas@mueller.de' };
+    const claim = { firstName: 'Tom', lastName: 'Miller', email: 'thomas@example.com' };
 
     // WHEN looking for candidates
     const [top] = findMemberCandidates(claim, MEMBERS);
@@ -101,7 +101,7 @@ describe('findMemberCandidates', () => {
 
   it('matches a name spelled with ue against the umlaut on file', () => {
     // GIVEN someone typing their own name without the umlaut
-    const claim = { firstName: 'Thomas', lastName: 'Mueller', email: 'neu@example.de' };
+    const claim = { firstName: 'Thomas', lastName: 'Mueller', email: 'neu@example.com' };
 
     // WHEN looking for candidates
     const [top] = findMemberCandidates(claim, MEMBERS);
@@ -114,7 +114,7 @@ describe('findMemberCandidates', () => {
 
   it('prefers the email label when name and email both match', () => {
     // GIVEN a claim matching one member on both signals
-    const claim = { firstName: 'Thomas', lastName: 'Müller', email: 'thomas@mueller.de' };
+    const claim = { firstName: 'Thomas', lastName: 'Müller', email: 'thomas@example.com' };
 
     // WHEN looking for candidates
     const [top] = findMemberCandidates(claim, MEMBERS);
@@ -125,7 +125,7 @@ describe('findMemberCandidates', () => {
 
   it('surfaces a typo through similarity', () => {
     // GIVEN a claim with two transposed letters
-    const claim = { firstName: 'Thoams', lastName: 'Mueler', email: 'neu@example.de' };
+    const claim = { firstName: 'Thoams', lastName: 'Mueler', email: 'neu@example.com' };
 
     // WHEN looking for candidates
     const suggestions = findMemberCandidates(claim, MEMBERS);
@@ -138,7 +138,7 @@ describe('findMemberCandidates', () => {
 
   it('suggests nobody for an unrelated name', () => {
     // GIVEN a claim resembling no member on file
-    const claim = { firstName: 'Wolfgang', lastName: 'Habicht', email: 'neu@example.de' };
+    const claim = { firstName: 'Wolfgang', lastName: 'Habicht', email: 'neu@example.com' };
 
     // WHEN looking for candidates
     // THEN the threshold keeps the list empty rather than offering noise
@@ -150,11 +150,11 @@ describe('findMemberCandidates', () => {
     // the other the given name. Both score 0.8333 on raw similarity, so the boost is the only
     // thing that can separate them.
     const members = [
-      candidate('surname-typo', 'Thomas Muelier', 'a@example.de'),
-      candidate('given-typo', 'Thomes Mueller', 'b@example.de'),
+      candidate('surname-typo', 'Thomas Muelier', 'a@example.com'),
+      candidate('given-typo', 'Thomes Mueller', 'b@example.com'),
     ];
 
-    const claim = { firstName: 'Thomas', lastName: 'Mueller', email: 'neu@example.de' };
+    const claim = { firstName: 'Thomas', lastName: 'Mueller', email: 'neu@example.com' };
 
     // WHEN looking for candidates
     const suggestions = findMemberCandidates(claim, members);
@@ -168,12 +168,12 @@ describe('findMemberCandidates', () => {
   it('honors the limit', () => {
     // GIVEN four members who all resemble the claim
     const members = [
-      candidate('1', 'Thomas Mueller', 'a@example.de'),
-      candidate('2', 'Thomas Muellar', 'b@example.de'),
-      candidate('3', 'Thomas Mueler', 'c@example.de'),
-      candidate('4', 'Thomas Muelller', 'd@example.de'),
+      candidate('1', 'Thomas Mueller', 'a@example.com'),
+      candidate('2', 'Thomas Muellar', 'b@example.com'),
+      candidate('3', 'Thomas Mueler', 'c@example.com'),
+      candidate('4', 'Thomas Muelller', 'd@example.com'),
     ];
-    const claim = { firstName: 'Thomas', lastName: 'Mueller', email: 'neu@example.de' };
+    const claim = { firstName: 'Thomas', lastName: 'Mueller', email: 'neu@example.com' };
 
     // WHEN asking for two
     // THEN exactly two come back
@@ -186,7 +186,7 @@ describe('findMemberCandidates', () => {
     // THEN neither produces a suggestion, and neither throws
     expect(findMemberCandidates({ firstName: '', lastName: '', email: '' }, MEMBERS)).toEqual([]);
     expect(
-      findMemberCandidates({ firstName: 'Thomas', lastName: 'Mueller', email: 'a@b.de' }, []),
+      findMemberCandidates({ firstName: 'Thomas', lastName: 'Mueller', email: 'a@example.com' }, []),
     ).toEqual([]);
   });
 });

@@ -13,7 +13,7 @@ test.describe('Admin Dashboard', () => {
         refresh_token: 'fake-refresh',
         user: {
           id: 'mock-user-id',
-          email: 'admin@fce.de',
+          email: 'admin@example.com',
           aud: 'authenticated',
           role: 'authenticated',
           app_metadata: {},
@@ -39,7 +39,7 @@ test.describe('Admin Dashboard', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          user: { id: 'mock-user-id', email: 'admin@fce.de' },
+          user: { id: 'mock-user-id', email: 'admin@example.com' },
           access_token: 'fake-token'
         }),
       });
@@ -67,9 +67,9 @@ test.describe('Admin Dashboard', () => {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify([
-              { id: '1', name: 'Max Mustermann', email: 'max@fce.de', seniority_level: 'Senior', historical_shifts: 5, is_approved: true, is_admin: true, created_at: new Date().toISOString() },
-              { id: '2', name: 'Erika Musterfrau', email: 'erika@fce.de', seniority_level: 'Standard', historical_shifts: 2, is_approved: true, auth_id: 'existing-auth-2', created_at: new Date().toISOString() },
-              { id: '3', name: 'New User', email: 'pending@fce.de', seniority_level: 'Junior', historical_shifts: 0, is_approved: false, created_at: new Date().toISOString() },
+              { id: '1', name: 'Max Mustermann', email: 'max@example.com', seniority_level: 'Senior', historical_shifts: 5, is_approved: true, is_admin: true, created_at: new Date().toISOString() },
+              { id: '2', name: 'Erika Musterfrau', email: 'erika@example.com', seniority_level: 'Standard', historical_shifts: 2, is_approved: true, auth_id: 'existing-auth-2', created_at: new Date().toISOString() },
+              { id: '3', name: 'New User', email: 'pending@example.com', seniority_level: 'Junior', historical_shifts: 0, is_approved: false, created_at: new Date().toISOString() },
             ]),
           });
         } else {
@@ -90,7 +90,7 @@ test.describe('Admin Dashboard', () => {
             {
               id: 'reg-1',
               auth_id: 'auth-reg-1',
-              email: 'neu@example.de',
+              email: 'neu@example.com',
               first_name: 'Mak',
               last_name: 'Mustermann',
               created_at: new Date().toISOString(),
@@ -310,7 +310,7 @@ test.describe('Admin Dashboard', () => {
     await page.goto('/admin/members');
 
     // THEN we should see the pending member
-    await expect(page.locator('body')).toContainText('pending@fce.de');
+    await expect(page.locator('body')).toContainText('pending@example.com');
 
     // WHEN we click "Freischalten"
     await page.click('button:has-text("Freischalten")');
@@ -326,7 +326,7 @@ test.describe('Admin Dashboard', () => {
 
     // GIVEN we fill out the "Mitglied hinzufügen" form
     await page.fill('input[placeholder="Vorname Nachname"]', 'New Admin Member');
-    await page.fill('input[placeholder="email@fce.de"]', 'new-admin@fce.de');
+    await page.fill('input[placeholder="email@fce.de"]', 'new-admin@example.com');
 
     // WHEN we click "Mitglied anlegen"
     await page.click('button:has-text("Mitglied anlegen")');
@@ -506,7 +506,7 @@ test.describe('Admin Dashboard', () => {
     await expect.poll(() => capturedLink, { timeout: 15000 }).not.toBeNull();
     expect(capturedLink).toMatchObject({
       auth_id: 'auth-reg-1',
-      email: 'neu@example.de',
+      email: 'neu@example.com',
       is_approved: true,
     });
 
@@ -600,7 +600,7 @@ test.describe('Admin Dashboard', () => {
     await expect.poll(() => capturedCreate, { timeout: 15000 }).not.toBeNull();
     expect(capturedCreate).toMatchObject({
       auth_id: 'auth-reg-1',
-      email: 'neu@example.de',
+      email: 'neu@example.com',
       name: 'Mak Mustermann',
       is_approved: true,
       is_admin: false,
