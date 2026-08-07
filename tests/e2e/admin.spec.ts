@@ -469,9 +469,11 @@ test.describe('Admin Dashboard', () => {
   test('Admin sees a ranked suggestion for a pending registration and can link it', async ({ page }) => {
     // GIVEN the members page with one pending registration
     let capturedLink: Record<string, unknown> | null = null;
+    let capturedLinkUrl: string | null = null;
     await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
       if (route.request().method() === 'PATCH') {
         capturedLink = route.request().postDataJSON();
+        capturedLinkUrl = route.request().url();
         await route.fulfill({ status: 204 });
       } else {
         await route.fallback();
@@ -498,7 +500,7 @@ test.describe('Admin Dashboard', () => {
     await expect(page.locator('body')).toContainText('ähnlich');
 
     // WHEN linking to the suggestion
-    await page.getByRole('button', { name: /Max Mustermann/ }).click();
+    await page.getByRole('button', { name: /Mit Max Mustermann verknüpfen/ }).click();
 
     // THEN the member row is claimed with the registration's auth id and email
     await expect.poll(() => capturedLink, { timeout: 15000 }).not.toBeNull();
@@ -507,6 +509,9 @@ test.describe('Admin Dashboard', () => {
       email: 'neu@example.de',
       is_approved: true,
     });
+
+    // AND the PATCH targeted the suggested member's row, not some other one
+    expect(capturedLinkUrl).toContain('id=eq.1');
 
     // AND the resolved claim is removed from the registrations table
     await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
@@ -552,7 +557,7 @@ test.describe('Admin Dashboard', () => {
     await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
 
     // WHEN linking to the suggestion and the update fails
-    await page.getByRole('button', { name: /Max Mustermann/ }).click();
+    await page.getByRole('button', { name: /Mit Max Mustermann verknüpfen/ }).click();
 
     // THEN the admin is told the link failed
     await expect.poll(() => alertMessage, { timeout: 15000 }).not.toBeNull();
@@ -560,5 +565,89 @@ test.describe('Admin Dashboard', () => {
 
     // AND the claim survives, since it is never deleted when the update failed
     expect(deleteCalled).toBe(false);
+  });
+
+  test('Creating a new member from a registration posts the member and deletes the claim', async ({ page }) => {
+    // GIVEN the members POST is captured, leaving GETs to the beforeEach handler
+    let capturedCreate: Record<string, unknown> | null = null;
+    await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
+      if (route.request().method() === 'POST') {
+        capturedCreate = route.request().postDataJSON();
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([]) });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN the registration's DELETE is captured, leaving its GET to the beforeEach handler
+    let deletedRegistrationUrl: string | null = null;
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'DELETE') {
+        deletedRegistrationUrl = route.request().url();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // WHEN creating a new member from the pending registration
+    await page.getByRole('button', { name: 'Als neues Mitglied anlegen' }).click();
+
+    // THEN the new member is posted with the claim's identity, approved and non-admin
+    await expect.poll(() => capturedCreate, { timeout: 15000 }).not.toBeNull();
+    expect(capturedCreate).toMatchObject({
+      auth_id: 'auth-reg-1',
+      email: 'neu@example.de',
+      name: 'Mak Mustermann',
+      is_approved: true,
+      is_admin: false,
+    });
+
+    // AND the resolved claim is removed from the registrations table
+    await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
+    expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
+  });
+
+  test('Rejecting a registration only deletes the claim', async ({ page }) => {
+    // GIVEN any write to members is captured, so a wrongly-issued write would be visible
+    let membersWriteCalled = false;
+    await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
+      if (['PATCH', 'POST', 'PUT'].includes(route.request().method())) {
+        membersWriteCalled = true;
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN the registration's DELETE is captured, leaving its GET to the beforeEach handler
+    let deletedRegistrationUrl: string | null = null;
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'DELETE') {
+        deletedRegistrationUrl = route.request().url();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN the confirmation dialog is accepted
+    page.on('dialog', async dialog => {
+      await dialog.accept();
+    });
+
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // WHEN rejecting the pending registration
+    await page.getByRole('button', { name: 'Ablehnen' }).click();
+
+    // THEN only the claim is deleted
+    await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
+    expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
+    expect(membersWriteCalled).toBe(false);
   });
 });
