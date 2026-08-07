@@ -152,6 +152,13 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 - A clearer message when Supabase is unreachable, rather than passing the raw browser fetch error
   through as "Anmeldung fehlgeschlagen: NetworkError ..."
 - Mobile polish for the admin screens, which are laid out desktop first
+- **If `utils/memberMatch.ts` suggestions ever prove too noisy or too sparse in real use, score the
+  surname and the given name separately and weight the surname heavily, rather than moving the single
+  global threshold.** Bigram similarity over the joined name conflates two signals of very different
+  value: a different person sharing a surname scores 0.512, a different person sharing a given name
+  scores 0.417, yet a surname is far more identifying. The current `+0.05` surname boost only breaks
+  near ties and is overridden whenever the raw scores already differ by more than that, so it cannot
+  fix a genuinely wrong ranking on its own
 
 ## Decided, no action
 
