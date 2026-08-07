@@ -12,7 +12,7 @@ const GERMAN_TRANSLITERATIONS: [RegExp, string][] = [
  * "Müller, Thomas" and "Thomas Mueller" come out identical.
  */
 export function normalizeName(name: string): string {
-  let value = name.toLowerCase();
+  let value = name.toLowerCase().normalize('NFC');
 
   for (const [pattern, replacement] of GERMAN_TRANSLITERATIONS) {
     value = value.replace(pattern, replacement);
@@ -33,6 +33,8 @@ export type MemberCandidate = {
   name: string;
   email: string;
   historical_shifts: number;
+  is_admin: boolean;
+  auth_id: string | null;
 };
 
 export type MatchReason = 'exact-email' | 'exact-name' | 'similar';
@@ -42,10 +44,6 @@ export type MatchSuggestion = {
   score: number;
   reason: MatchReason;
 };
-
-const SUGGESTION_THRESHOLD = 0.6;
-const SURNAME_BOOST = 0.05;
-const DEFAULT_LIMIT = 3;
 
 /**
  * Members who might be the person behind a registration, best first.
@@ -57,7 +55,7 @@ const DEFAULT_LIMIT = 3;
 export function findMemberCandidates(
   claim: { firstName: string; lastName: string; email: string },
   members: MemberCandidate[],
-  limit: number = DEFAULT_LIMIT,
+  limit = 3,
 ): MatchSuggestion[] {
   const claimedName = normalizeName(`${claim.firstName} ${claim.lastName}`);
   const claimedEmail = claim.email.trim().toLowerCase();
@@ -85,9 +83,16 @@ export function findMemberCandidates(
       surnameTokens.length > 0 && surnameTokens.every(token => memberTokens.includes(token));
 
     let score = diceSimilarity(claimedName, memberName);
-    if (sharesSurname) score = Math.min(0.99, score + SURNAME_BOOST);
+    // A boost rather than a filter, so a mistyped surname does not hide the right candidate.
+    if (sharesSurname) score = Math.min(0.99, score + 0.05);
 
-    if (score >= SUGGESTION_THRESHOLD) {
+    // Measured against this member list: a one-letter typo of the same person scores 0.883, a
+    // two-error typo scores 0.696, a different person sharing a surname scores 0.512, a different
+    // person sharing a given name scores 0.417, and an unrelated name scores 0.000. The
+    // discriminating band is therefore 0.51 to 0.70, and 0.6 sits near its center. Lowering it
+    // toward 0.5 would start surfacing same-surname strangers, which in a village club means
+    // relatives, and a suggestion list padded with relatives trains the admin to click past it.
+    if (score >= 0.6) {
       suggestions.push({ member, score, reason: 'similar' });
     }
   }

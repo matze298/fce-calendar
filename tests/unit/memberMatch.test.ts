@@ -52,10 +52,31 @@ describe('normalizeName', () => {
     expect(normalizeName('')).toBe('');
     expect(normalizeName('   ')).toBe('');
   });
+
+  it('normalizes a decomposed umlaut the same as its precomposed form', () => {
+    // GIVEN the same name once precomposed and once spelled with a combining diaeresis
+    // (Latin small letter u followed by U+0308) instead of the single precomposed ü character
+    const precomposed = 'Müller';
+    const decomposed = 'Müller';
+    expect(precomposed).not.toBe(decomposed);
+
+    // WHEN both are normalized
+    // THEN they agree, because NFC composes the combining mark before the transliteration table
+    // runs, so a decomposed input does not degrade to "muller" and miss the umlaut rule
+    expect(normalizeName(decomposed)).toBe(normalizeName(precomposed));
+    expect(normalizeName(decomposed)).toBe('mueller');
+  });
 });
 
-function candidate(id: string, name: string, email: string, historical_shifts = 0): MemberCandidate {
-  return { id, name, email, historical_shifts };
+function candidate(
+  id: string,
+  name: string,
+  email: string,
+  historical_shifts = 0,
+  is_admin = false,
+  auth_id: string | null = null,
+): MemberCandidate {
+  return { id, name, email, historical_shifts, is_admin, auth_id };
 }
 
 const MEMBERS: MemberCandidate[] = [
