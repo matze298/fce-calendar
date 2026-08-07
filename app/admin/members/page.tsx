@@ -16,6 +16,7 @@ type Member = {
   historical_shifts: number;
   is_approved: boolean;
   is_admin: boolean;
+  auth_id: string | null;
   created_at: string;
   availability?: string;
   exempt?: boolean;
@@ -60,10 +61,8 @@ export default function ManageMembersPage() {
         return;
       }
 
-      const [loadedMembers, loadedRegistrations] = await Promise.all([
-        fetchMembers(),
-        fetchRegistrations(),
-      ]);
+      const { members: loadedMembers, registrations: loadedRegistrations } =
+        await fetchMembersAndRegistrations();
 
       setMembers(loadedMembers);
       setRegistrations(loadedRegistrations);
@@ -83,7 +82,18 @@ export default function ManageMembersPage() {
     else setMembers(await fetchMembers());
   };
 
-  const linkRegistration = async (registration: Registration, memberId: string) => {
+  const linkRegistration = async (
+    registration: Registration,
+    member: { id: string; name: string; auth_id: string | null },
+  ) => {
+    if (member.auth_id) {
+      const confirmed = confirm(
+        `${member.name} ist bereits mit einem Konto verknüpft. Wenn Sie fortfahren, verliert die ` +
+          'bisher verknüpfte Person den Zugriff auf dieses Mitglied. Trotzdem verknüpfen?',
+      );
+      if (!confirmed) return;
+    }
+
     const { error } = await supabase
       .from('members')
       .update({
@@ -91,19 +101,22 @@ export default function ManageMembersPage() {
         email: registration.email,
         is_approved: true,
       })
-      .eq('id', memberId);
+      .eq('id', member.id);
 
     if (error) {
       alert('Verknüpfen fehlgeschlagen: ' + error.message);
       return;
     }
 
-    await supabase.from('registrations').delete().eq('id', registration.id);
+    const { error: deleteError } = await supabase.from('registrations').delete().eq('id', registration.id);
 
-    const [loadedMembers, loadedRegistrations] = await Promise.all([
-      fetchMembers(),
-      fetchRegistrations(),
-    ]);
+    if (deleteError) {
+      alert('Mitglied wurde verknüpft, aber die Registrierung konnte nicht entfernt werden: ' + deleteError.message);
+      return;
+    }
+
+    const { members: loadedMembers, registrations: loadedRegistrations } =
+      await fetchMembersAndRegistrations();
     setMembers(loadedMembers);
     setRegistrations(loadedRegistrations);
   };
@@ -122,12 +135,15 @@ export default function ManageMembersPage() {
       return;
     }
 
-    await supabase.from('registrations').delete().eq('id', registration.id);
+    const { error: deleteError } = await supabase.from('registrations').delete().eq('id', registration.id);
 
-    const [loadedMembers, loadedRegistrations] = await Promise.all([
-      fetchMembers(),
-      fetchRegistrations(),
-    ]);
+    if (deleteError) {
+      alert('Mitglied wurde angelegt, aber die Registrierung konnte nicht entfernt werden: ' + deleteError.message);
+      return;
+    }
+
+    const { members: loadedMembers, registrations: loadedRegistrations } =
+      await fetchMembersAndRegistrations();
     setMembers(loadedMembers);
     setRegistrations(loadedRegistrations);
   };
@@ -331,6 +347,9 @@ export default function ManageMembersPage() {
                               {registration.first_name} {registration.last_name}
                             </p>
                             <p className="text-xs text-muted">{registration.email}</p>
+                            <p className="text-[10px] text-muted mt-1">
+                              Registriert am {new Date(registration.created_at).toLocaleDateString('de-DE')}
+                            </p>
                           </div>
                           <button
                             onClick={() => rejectRegistration(registration)}
@@ -348,12 +367,22 @@ export default function ManageMembersPage() {
                             {suggestions.map((suggestion) => (
                               <button
                                 key={suggestion.member.id}
-                                onClick={() => linkRegistration(registration, suggestion.member.id)}
+                                onClick={() => linkRegistration(registration, suggestion.member)}
                                 className="w-full text-left p-2 rounded-lg border-2 border-gray-100 hover:border-primary transition-colors"
                               >
                                 <span className="font-bold text-secondary text-sm">
-                                  {suggestion.member.name}
+                                  Mit {suggestion.member.name} verknüpfen
                                 </span>
+                                {suggestion.member.is_admin && (
+                                  <span className="ml-2 text-[10px] font-bold text-white bg-red-600 px-2 py-0.5 rounded-full uppercase align-middle">
+                                    Administrator
+                                  </span>
+                                )}
+                                {suggestion.member.auth_id && (
+                                  <span className="ml-2 text-[10px] font-bold text-white bg-secondary px-2 py-0.5 rounded-full uppercase align-middle">
+                                    Bereits verknüpft
+                                  </span>
+                                )}
                                 <span className="text-xs text-muted">
                                   {' '}
                                   · {suggestion.member.historical_shifts} Dienste ·{' '}
@@ -372,14 +401,25 @@ export default function ManageMembersPage() {
                           <select
                             defaultValue=""
                             onChange={(e) => {
-                              if (e.target.value) linkRegistration(registration, e.target.value);
+                              const target = e.target;
+                              const memberId = target.value;
+                              if (!memberId) return;
+
+                              // Reset immediately so re-selecting the same member after a failed
+                              // link still fires a change event instead of appearing dead.
+                              target.value = '';
+
+                              const member = members.find((candidate) => candidate.id === memberId);
+                              if (member) linkRegistration(registration, member);
                             }}
                             className="flex-grow p-2 border rounded-lg text-sm"
                           >
-                            <option value="">Manuell zuordnen ...</option>
+                            <option value="">Manuell zuordnen…</option>
                             {members.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.name} ({m.email})
+                                {m.is_admin ? ' · Administrator' : ''}
+                                {m.auth_id ? ' · bereits verknüpft' : ''}
                               </option>
                             ))}
                           </select>
@@ -602,6 +642,18 @@ async function fetchRegistrations(): Promise<Registration[]> {
     .order('created_at', { ascending: true });
 
   return data ?? [];
+}
+
+/**
+ * Both readers in one round trip. A plain module-level function rather than a component callback,
+ * so the mount effect can call it without pulling a memoized closure into its dependency graph.
+ */
+async function fetchMembersAndRegistrations(): Promise<{
+  members: Member[];
+  registrations: Registration[];
+}> {
+  const [members, registrations] = await Promise.all([fetchMembers(), fetchRegistrations()]);
+  return { members, registrations };
 }
 
 /** How a suggestion earned its place, for the admin deciding whether to trust it. */
