@@ -67,8 +67,8 @@ test.describe('Admin Dashboard', () => {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify([
-              { id: '1', name: 'Max Mustermann', email: 'max@fce.de', seniority_level: 'Senior', historical_shifts: 5, is_approved: true, created_at: new Date().toISOString() },
-              { id: '2', name: 'Erika Musterfrau', email: 'erika@fce.de', seniority_level: 'Standard', historical_shifts: 2, is_approved: true, created_at: new Date().toISOString() },
+              { id: '1', name: 'Max Mustermann', email: 'max@fce.de', seniority_level: 'Senior', historical_shifts: 5, is_approved: true, is_admin: true, created_at: new Date().toISOString() },
+              { id: '2', name: 'Erika Musterfrau', email: 'erika@fce.de', seniority_level: 'Standard', historical_shifts: 2, is_approved: true, auth_id: 'existing-auth-2', created_at: new Date().toISOString() },
               { id: '3', name: 'New User', email: 'pending@fce.de', seniority_level: 'Junior', historical_shifts: 0, is_approved: false, created_at: new Date().toISOString() },
             ]),
           });
@@ -649,5 +649,102 @@ test.describe('Admin Dashboard', () => {
     await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
     expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
     expect(membersWriteCalled).toBe(false);
+  });
+
+  test('A suggestion for an admin member shows the Administrator warning', async ({ page }) => {
+    // GIVEN the members page with one pending registration whose top suggestion is an admin member
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // WHEN looking at the suggestion row offering to link to that admin member
+    const suggestionButton = page.getByRole('button', { name: /Mit Max Mustermann verknüpfen/ });
+
+    // THEN the Administrator warning is shown on that suggestion
+    await expect(suggestionButton).toContainText('Administrator');
+  });
+
+  test('Linking to an already-linked member via the manual select asks for confirmation, and canceling writes nothing', async ({ page }) => {
+    // GIVEN the members PATCH and the registration DELETE are captured
+    let patchCalled = false;
+    await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
+      if (route.request().method() === 'PATCH') {
+        patchCalled = true;
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    let deleteCalled = false;
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'DELETE') {
+        deleteCalled = true;
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN the confirmation dialog is dismissed
+    page.on('dialog', async dialog => {
+      expect(dialog.message()).toContain('bereits mit einem Konto verknüpft');
+      await dialog.dismiss();
+    });
+
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // WHEN choosing the already-linked member through the manual select and canceling the warning
+    const manualSelect = page.locator('select', { hasText: 'Manuell zuordnen' });
+    await manualSelect.selectOption('2');
+
+    // THEN neither the member row nor the registration claim is touched, giving the UI a moment
+    // to have done the wrong thing before asserting nothing happened
+    await page.waitForTimeout(500);
+    expect(patchCalled).toBe(false);
+    expect(deleteCalled).toBe(false);
+  });
+
+  test('Confirming the overwrite links the already-linked member and removes the claim', async ({ page }) => {
+    // GIVEN the members PATCH and the registration DELETE are captured
+    let capturedLinkUrl: string | null = null;
+    await page.route(url => url.href.includes('/rest/v1/members'), async (route) => {
+      if (route.request().method() === 'PATCH') {
+        capturedLinkUrl = route.request().url();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    let deletedRegistrationUrl: string | null = null;
+    await page.route(url => url.href.includes('/rest/v1/registrations'), async (route) => {
+      if (route.request().method() === 'DELETE') {
+        deletedRegistrationUrl = route.request().url();
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    // GIVEN the confirmation dialog is accepted
+    page.on('dialog', async dialog => {
+      await dialog.accept();
+    });
+
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Ausstehende Registrierungen', { timeout: 15000 });
+
+    // WHEN choosing the already-linked member through the manual select and accepting the warning
+    const manualSelect = page.locator('select', { hasText: 'Manuell zuordnen' });
+    await manualSelect.selectOption('2');
+
+    // THEN the member row is claimed, targeting the selected member and not the suggested one
+    await expect.poll(() => capturedLinkUrl, { timeout: 15000 }).not.toBeNull();
+    expect(capturedLinkUrl).toContain('id=eq.2');
+
+    // AND the resolved claim is removed from the registrations table
+    await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
+    expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
   });
 });
