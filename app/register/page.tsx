@@ -46,8 +46,13 @@ export default function RegisterPage() {
     }
 
     const authId = signUpData.user?.id;
-    const claimWriteFailedMessage =
-      'Konto erstellt, aber die Registrierung konnte nicht gespeichert werden. Bitte wenden Sie sich an den Vorstand.';
+
+    /**
+     * Both dead ends leave an auth account with no claim for an admin to find. The cause is named
+     * so the person can report something actionable rather than "it did not work".
+     */
+    const claimWriteFailed = (cause: string) =>
+      `Konto erstellt, aber die Registrierung konnte nicht gespeichert werden (${cause}). Bitte wenden Sie sich an den Vorstand.`;
 
     if (authId) {
       const { error: claimError } = await supabase.from('registrations').insert({
@@ -66,15 +71,14 @@ export default function RegisterPage() {
       }
 
       if (claimError) {
-        setError(claimWriteFailedMessage);
+        console.error('Registration claim insert failed:', claimError);
+        setError(claimWriteFailed(claimError.code ? `${claimError.code}: ${claimError.message}` : claimError.message));
         setLoading(false);
         return;
       }
     } else {
-      // signUp succeeded but returned no user id, so there is nothing to write a claim for. The
-      // auth user still exists with no claim for an admin to find, the same dead end as a failed
-      // claim write.
-      setError(claimWriteFailedMessage);
+      console.error('signUp returned no user id, so no registration claim was written');
+      setError(claimWriteFailed('keine Benutzer-ID'));
       setLoading(false);
       return;
     }
