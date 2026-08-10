@@ -14,7 +14,11 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned rather than "latest". Resolving "latest" needs an unauthenticated GitHub API call
+          # that is rate limited per runner, which has already failed this job. A fixed version is
+          # fetched from npm instead, so the job no longer depends on that quota, and a Supabase
+          # release cannot change what CI runs without a commit here.
+          version: 2.113.0
 
       - name: Start Supabase Local (Verification)
         run: |
