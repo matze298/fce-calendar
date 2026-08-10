@@ -130,8 +130,13 @@ SET LOCAL ROLE service_role;
 -- WHEN it runs the join it uses to find who to email
 -- THEN the query succeeds, because BYPASSRLS exempts service_role from every policy above but
 -- not from the underlying table privilege, which is granted separately
+-- All three tables the cron reaches are joined here. Leaving one out would let a future edit drop
+-- its grant while this assertion still passed.
 SELECT lives_ok(
-  $$SELECT a.id, m.email FROM assignments a JOIN members m ON m.id = a.member_id$$,
+  $$SELECT a.id, m.email, wd.date
+      FROM assignments a
+      JOIN members    m  ON m.id  = a.member_id
+      JOIN work_dates wd ON wd.id = a.workdate_id$$,
   'service_role can run the cron''s read join');
 RESET ROLE;
 
