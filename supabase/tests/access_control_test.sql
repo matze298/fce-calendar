@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(23);
+SELECT plan(25);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -111,6 +111,23 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
 SELECT is((SELECT first_name || '|' || last_name FROM registrations
             WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000002'),
           '|', 'a missing name yields empty strings, not a failed signup');
+
+-- GIVEN a registration claim that already exists for an auth_id, as happens when a repeat
+-- signUp for the same unconfirmed address later fires the trigger a second time
+INSERT INTO registrations (auth_id, email, first_name, last_name) VALUES
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'pgtap.wiederholt@example.com', 'Wieder', 'Holt');
+
+-- WHEN an auth.users row with that same id is inserted
+-- THEN the trigger does not raise on the conflicting auth_id
+SELECT lives_ok(
+  $$INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+      ('bbbbbbbb-0000-0000-0000-000000000003', 'pgtap.wiederholt@example.com',
+       '{"first_name":"Wieder","last_name":"Holt"}'::jsonb)$$,
+  'a repeat auth.users insert for an existing claim does not raise');
+
+-- THEN exactly one claim remains for that auth_id, the original, not a second one
+SELECT is((SELECT count(*) FROM registrations WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000003'),
+          1::bigint, 'the conflicting insert leaves exactly one claim');
 
 -- GIVEN an approved non-admin member
 SELECT set_config('request.jwt.claims',

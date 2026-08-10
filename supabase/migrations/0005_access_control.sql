@@ -83,8 +83,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE
    TO authenticated;
 REVOKE ALL ON TABLE members, work_dates, assignments, settings FROM anon;
 
--- The claim is written in the same transaction as the account, so an auth account can no longer
--- exist without one. NEW.email is authoritative, unlike the form field it replaces.
+-- Creates a registration claim for every new auth account in the same transaction, so every
+-- account has exactly one. The address comes from the auth row, not from user input.
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
 RETURNS trigger
 LANGUAGE plpgsql
