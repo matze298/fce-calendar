@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(33);
+SELECT plan(35);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -188,6 +188,19 @@ INSERT INTO assignments (member_id, workdate_id, status) VALUES
   ('eeeeeeee-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002', 'Published'),
   ('eeeeeeee-0000-0000-0000-000000000002', 'dddddddd-0000-0000-0000-000000000001', 'Draft');
 
+-- GIVEN a fifth approved member whose only assignment on the shared date is a Draft, not a
+-- Published one, distinct from Ent Wurf, who is never a JWT subject in this suite
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000005', 'pgtap.eigenerentwurf@example.com',
+   '{"first_name":"Eigener","last_name":"Entwurf"}'::jsonb);
+
+INSERT INTO members (id, auth_id, name, email, is_admin, is_approved) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000005',
+   'Eigener Entwurf', 'pgtap.eigenerentwurf@example.com', false, true);
+
+INSERT INTO assignments (member_id, workdate_id, status) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000004', 'dddddddd-0000-0000-0000-000000000001', 'Draft');
+
 -- WHEN the member reads their roster
 SELECT set_config('request.jwt.claims',
                   json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000002',
@@ -203,13 +216,23 @@ SELECT set_eq(
 -- THEN only their own date appears, so a colleague's unrelated shift stays private
 SELECT is((SELECT count(DISTINCT workdate_id) FROM my_shift_roster), 1::bigint,
           'the roster covers only dates the member works');
-SELECT is((SELECT DISTINCT date::text FROM my_shift_roster), '2099-01-10',
-          'the roster names the correct date');
+SELECT set_eq('SELECT DISTINCT date::text FROM my_shift_roster', ARRAY['2099-01-10'],
+              'the roster names the correct date');
 
 -- THEN a drafted person is absent, so an unpublished plan cannot tell anyone they are working
 SELECT is((SELECT count(*) FROM my_shift_roster WHERE member_name = 'Ent Wurf'), 0::bigint,
           'a drafted assignment does not appear on the roster');
 
+RESET ROLE;
+
+-- WHEN a member whose only assignment on that date is a Draft reads the roster
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000005',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+-- THEN it is empty, so a draft plan does not tell them they are working alongside a colleague
+SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
+          'a member whose own assignment is a draft sees an empty roster');
 RESET ROLE;
 
 -- WHEN an approved member holding no assignment at all reads the roster
@@ -230,6 +253,14 @@ SET LOCAL ROLE authenticated;
 -- THEN it is empty, so a pending account learns nothing from a stray assignment
 SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
           'an unapproved member sees an empty roster despite holding a shift');
+RESET ROLE;
+
+-- WHEN an authenticated caller's JWT carries no sub claim at all
+SELECT set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+SET LOCAL ROLE authenticated;
+-- THEN the roster is empty, so a missing identity does not fall through to every row in the database
+SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
+          'an authenticated caller with no sub claim sees an empty roster');
 RESET ROLE;
 
 -- GIVEN an unauthenticated visitor
