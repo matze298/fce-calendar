@@ -92,7 +92,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="bg-secondary p-8 flex flex-col items-center text-white">
-          <Image src="/fce-logo.png" alt="FCE Logo" width={60} height={60} className="mb-4" />
+          <Image src="/fce-logo.png" alt="FCE Logo" width={60} height={66} className="mb-4" />
           <h1 className="text-2xl font-bold uppercase tracking-wider text-primary">Konto erstellen</h1>
         </div>
 

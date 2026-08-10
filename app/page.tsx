@@ -10,7 +10,7 @@ export default function Home() {
             src="/fce-logo.png"
             alt="1. FC Egenhausen Logo"
             width={120}
-            height={120}
+            height={132}
             priority
             className="drop-shadow-md"
           />
