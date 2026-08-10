@@ -1,7 +1,18 @@
 import type { jsPDF } from 'jspdf';
+import type { UserOptions } from 'jspdf-autotable';
 
 import type { AppointmentExport } from '@/utils/appointmentExport';
 import { parseIsoDate } from '@/utils/startTime';
+
+type AutoTableFn = (doc: jsPDF, options: UserOptions) => void;
+
+const MARGIN_X = 14;
+/** mm reserved at the bottom of the page for the print margin and the "Seite X von Y" footer. */
+const PAGE_BOTTOM_MARGIN = 20;
+/** mm the cursor resets to when a section is pushed onto a fresh page. */
+const PAGE_TOP_MARGIN = 20;
+/** mm needed for a section heading line plus the first line of whatever follows it. */
+const SECTION_HEADING_HEIGHT = 14;
 
 /**
  * Renders the schedule as an A4 PDF and hands it to the browser as a download.
@@ -16,16 +27,15 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
   ]);
 
   const doc = new JsPdf({ unit: 'mm', format: 'a4' });
-  const marginX = 14;
 
   // The source logo is 2065 x 2268, a ratio of 0.9105, so the box is deliberately not square.
   const logo = await loadLogoDataUrl();
-  const textLeft = logo ? marginX + 24 : marginX;
+  const textLeft = logo ? MARGIN_X + 24 : MARGIN_X;
   if (logo) {
     doc.addImage({
       imageData: logo,
       format: 'PNG',
-      x: marginX,
+      x: MARGIN_X,
       y: 14,
       width: 18,
       height: 19.8,
@@ -33,9 +43,26 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
     });
   }
 
+  renderAppointmentSections(doc, autoTable, data, today, textLeft);
+
+  doc.save(`schichtplan-${formatFilenameDate(today)}.pdf`);
+}
+
+/**
+ * Draws the title, both tables and the page footer onto an already-created document. Kept apart from
+ * the logo fetch and the save step above so it can be driven directly with a real jsPDF document in a
+ * test, without touching the DOM.
+ */
+export function renderAppointmentSections(
+  doc: jsPDF,
+  autoTable: AutoTableFn,
+  data: AppointmentExport,
+  today: Date,
+  textLeft: number,
+): void {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('FC Egenhausen 1921 - Schichtplan', textLeft, 22);
+  doc.text('1. FC Egenhausen 1921 - Dienstplan', textLeft, 22);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -45,19 +72,19 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Termine', marginX, cursorY);
+  doc.text('Termine', MARGIN_X, cursorY);
   cursorY += 4;
 
   if (data.appointments.length === 0) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Keine Termine im gewählten Zeitraum.', marginX, cursorY + 5);
+    doc.text('Keine Termine im gewählten Zeitraum.', MARGIN_X, cursorY + 5);
     cursorY += 14;
   } else {
     autoTable(doc, {
       startY: cursorY,
-      margin: { left: marginX, right: marginX },
-      head: [['Datum', 'Uhrzeit', 'Veranstaltung', 'Bedarf', 'Eingeteilte Personen']],
+      margin: { left: MARGIN_X, right: MARGIN_X },
+      head: [['Datum', 'Uhrzeit', 'Veranstaltung', 'Besetzung', 'Eingeteilte Personen']],
       body: data.appointments.map(appointment => [
         formatLongDate(appointment.date),
         appointment.startTime ?? '-',
@@ -77,19 +104,27 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
     cursorY = readFinalY(doc) + 12;
   }
 
+  // A table that ended near the bottom of its page would otherwise draw this heading past the print
+  // area, or leave it orphaned above a table that autoTable itself pushes to the next page.
+  const pageHeight = doc.internal.pageSize.getHeight();
+  if (cursorY + SECTION_HEADING_HEIGHT > pageHeight - PAGE_BOTTOM_MARGIN) {
+    doc.addPage();
+    cursorY = PAGE_TOP_MARGIN;
+  }
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Mitglieder mit mehreren Diensten', marginX, cursorY);
+  doc.text('Mitglieder mit mehreren Diensten', MARGIN_X, cursorY);
   cursorY += 4;
 
   if (data.frequentMembers.length === 0) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Kein Mitglied hat mehr als einen Dienst.', marginX, cursorY + 5);
+    doc.text('Kein Mitglied hat mehr als einen Dienst.', MARGIN_X, cursorY + 5);
   } else {
     autoTable(doc, {
       startY: cursorY,
-      margin: { left: marginX, right: marginX },
+      margin: { left: MARGIN_X, right: MARGIN_X },
       head: [['Name', 'Anzahl', 'Termine']],
       body: data.frequentMembers.map(member => [
         member.name,
@@ -112,10 +147,8 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
     doc.setPage(page);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`Seite ${page} von ${pageCount}`, marginX, doc.internal.pageSize.getHeight() - 8);
+    doc.text(`Seite ${page} von ${pageCount}`, MARGIN_X, doc.internal.pageSize.getHeight() - 8);
   }
-
-  doc.save(`schichtplan-${formatFilenameDate(today)}.pdf`);
 }
 
 /**
@@ -160,10 +193,18 @@ function renderLogoToDataUrl(bitmap: ImageBitmap): string | null {
   return canvas.toDataURL('image/png');
 }
 
-/** autoTable records where it stopped on the document, but the jsPDF types do not know about it. */
+/**
+ * autoTable records where it stopped on the document, but the jsPDF types do not know about it. This
+ * is only ever called right after an autoTable call, so a missing value means that call did not
+ * record one, which is a bug in the calling convention rather than something to paper over.
+ */
 function readFinalY(doc: jsPDF): number {
   const withTable = doc as unknown as { lastAutoTable?: { finalY?: number } };
-  return withTable.lastAutoTable?.finalY ?? 40;
+  const finalY = withTable.lastAutoTable?.finalY;
+  if (finalY === undefined) {
+    throw new Error('autoTable did not record a finalY position after drawing the appointments table.');
+  }
+  return finalY;
 }
 
 function buildSubtitle(data: AppointmentExport, today: Date): string {

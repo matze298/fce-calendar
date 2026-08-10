@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildAppointmentExport,
@@ -91,12 +91,20 @@ describe('buildAppointmentExport appointments', () => {
       assignment('1', 'm2', 'Örtel Anna'),
       assignment('1', 'm3', 'Anton Bauer'),
     ];
+    const localeCompareSpy = vi.spyOn(String.prototype, 'localeCompare');
 
     // WHEN building the export
     const result = buildAppointmentExport({ workDates, assignments, includePast: false, today: TODAY });
 
     // THEN Ö sorts as a German reader expects rather than after Z
     expect(result.appointments[0].assignedNames).toEqual(['Anton Bauer', 'Örtel Anna', 'Zacharias Weber']);
+
+    // THEN the sort explicitly requested German collation. This machine's default locale (and most
+    // others) already order these particular names the same way, so the array assertion above would
+    // still pass with a bare localeCompare(); this checks the actual call instead of relying on that
+    // coincidence.
+    expect(localeCompareSpy.mock.calls.some(call => call[1] === 'de')).toBe(true);
+    localeCompareSpy.mockRestore();
 
     // THEN the PostgREST time is trimmed for display
     expect(result.appointments[0].startTime).toBe('15:30');
@@ -130,11 +138,11 @@ describe('buildAppointmentExport appointments', () => {
 
 describe('buildAppointmentExport frequentMembers', () => {
   it('lists members with more than one shift and leaves out those with exactly one', () => {
-    // GIVEN one member on two dates and another on a single date
+    // GIVEN one member on two dates, supplied newest first, and another on a single date
     const workDates = [workDate('1', '2026-09-20'), workDate('2', '2026-10-05')];
     const assignments = [
-      assignment('1', 'm1', 'Anna Fischer'),
       assignment('2', 'm1', 'Anna Fischer'),
+      assignment('1', 'm1', 'Anna Fischer'),
       assignment('1', 'm2', 'Thomas Müller'),
     ];
 

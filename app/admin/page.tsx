@@ -470,7 +470,7 @@ export default function AdminDashboard() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <p className="text-sm text-secondary font-medium">
-                Schichtplan als PDF zum Aushängen und Verteilen.
+                Dienstplan als PDF zum Aushängen und Verteilen.
               </p>
               <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
                 <input
