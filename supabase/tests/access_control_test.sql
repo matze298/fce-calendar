@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(17);
+SELECT plan(23);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -89,6 +89,54 @@ SELECT throws_ok('SELECT count(*) FROM members',     '42501', NULL, 'anon is ref
 SELECT throws_ok('SELECT count(*) FROM assignments', '42501', NULL, 'anon is refused on assignments');
 SELECT throws_ok('SELECT count(*) FROM work_dates',  '42501', NULL, 'anon is refused on work_dates');
 
+RESET ROLE;
+
+-- GIVEN a new auth account carrying first and last name metadata
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('bbbbbbbb-0000-0000-0000-000000000001', 'pgtap.neu@example.com',
+   '{"first_name":"Neu","last_name":"Mitglied"}'::jsonb);
+
+-- THEN a claim exists, carrying the address from the auth row rather than a form field
+SELECT is((SELECT email FROM registrations WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000001'),
+          'pgtap.neu@example.com', 'the claim carries the authoritative address');
+SELECT is((SELECT first_name || ' ' || last_name FROM registrations
+            WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000001'),
+          'Neu Mitglied', 'the claim carries the submitted names');
+
+-- WHEN an auth account is created with no metadata at all, as a dashboard invite does
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'pgtap.ohne@example.com', '{}'::jsonb);
+
+-- THEN the insert succeeds with empty names rather than failing the account creation
+SELECT is((SELECT first_name || '|' || last_name FROM registrations
+            WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000002'),
+          '|', 'a missing name yields empty strings, not a failed signup');
+
+-- GIVEN an approved non-admin member
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000002',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+-- THEN they cannot read other people's registration claims
+SELECT is((SELECT count(*) FROM registrations), 0::bigint, 'member reads no registrations');
+RESET ROLE;
+
+-- GIVEN an approved admin
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000001',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+-- THEN they can review claims
+SELECT ok((SELECT count(*) FROM registrations) > 0, 'admin reads registrations');
+RESET ROLE;
+
+-- GIVEN an unauthenticated visitor
+SET LOCAL ROLE anon;
+-- THEN they cannot forge or spam a claim, which was the last anon write in the schema
+SELECT throws_ok(
+  $$INSERT INTO registrations (auth_id, email, first_name, last_name)
+    VALUES ('cccccccc-0000-0000-0000-000000000001', 'pgtap.forged@example.com', 'F', 'G')$$,
+  '42501', NULL, 'anon cannot insert a registration');
 RESET ROLE;
 
 SELECT * FROM finish();

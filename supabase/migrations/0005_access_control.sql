@@ -82,3 +82,46 @@ GRANT SELECT, INSERT, UPDATE, DELETE
    ON TABLE members, work_dates, assignments, settings
    TO authenticated;
 REVOKE ALL ON TABLE members, work_dates, assignments, settings FROM anon;
+
+-- The claim is written in the same transaction as the account, so an auth account can no longer
+-- exist without one. NEW.email is authoritative, unlike the form field it replaces.
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.registrations (auth_id, email, first_name, last_name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(TRIM(NEW.raw_user_meta_data ->> 'first_name'), ''),
+    COALESCE(TRIM(NEW.raw_user_meta_data ->> 'last_name'), '')
+  )
+  -- A repeat signUp for an existing unconfirmed address returns the same auth user. An
+  -- unhandled unique violation in an AFTER INSERT trigger would fail the signup itself.
+  ON CONFLICT (auth_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
+
+-- registrations. No INSERT policy for any role: the trigger is the only writer.
+DROP POLICY IF EXISTS "Anyone can submit a registration" ON registrations;
+DROP POLICY IF EXISTS "Authenticated can read registrations" ON registrations;
+DROP POLICY IF EXISTS "Authenticated can delete registrations" ON registrations;
+DROP POLICY IF EXISTS "Admins read registrations" ON registrations;
+DROP POLICY IF EXISTS "Admins delete registrations" ON registrations;
+
+CREATE POLICY "Admins read registrations" ON registrations
+  FOR SELECT TO authenticated USING (public.is_admin());
+CREATE POLICY "Admins delete registrations" ON registrations
+  FOR DELETE TO authenticated USING (public.is_admin());
+
+GRANT SELECT, DELETE ON TABLE registrations TO authenticated;
+REVOKE ALL ON TABLE registrations FROM anon;
