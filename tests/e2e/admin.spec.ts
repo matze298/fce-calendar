@@ -169,6 +169,20 @@ test.describe('Admin Dashboard', () => {
     await expect(page.locator('body')).toContainText('2 Personen');
   });
 
+  test('The member list marks who has an account and leaves the rest unmarked', async ({ page }) => {
+    // GIVEN the member list, where the fixture gives Erika an auth_id and Max none
+    await page.goto('/admin/members');
+    await expect(page.locator('body')).toContainText('Erika Musterfrau', { timeout: 15000 });
+
+    // THEN the member with a linked login is marked, scoped to her own row
+    const erika = page.getByRole('heading', { name: 'Erika Musterfrau' }).locator('..');
+    await expect(erika).toContainText('Registriert');
+
+    // THEN the member without one is not, which is what makes the badge meaningful
+    const max = page.getByRole('heading', { name: 'Max Mustermann' }).locator('..');
+    await expect(max).not.toContainText('Registriert');
+  });
+
   // WHEN clicking Generate Schedule
   test('Clicking "Generate Schedule" and verifying UI updates', async ({ page }) => {
     await page.route('**/api/generate', async (route) => {

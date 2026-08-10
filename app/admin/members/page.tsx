@@ -477,7 +477,17 @@ export default function ManageMembersPage() {
                 {approvedMembers.length > 0 ? approvedMembers.map((m) => (
                   <div key={m.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                     <div>
-                      <h3 className="font-bold text-secondary">{m.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-secondary">{m.name}</h3>
+                        {m.auth_id && (
+                          <span
+                            title="Dieses Mitglied hat ein Konto und kann sich anmelden"
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap"
+                          >
+                            ✓ Registriert
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted">{m.email}</p>
                     </div>
                     <div className="flex items-center gap-2 text-muted">
