@@ -44,10 +44,14 @@ administrators have full access to `members`, `work_dates` and `assignments`, an
 row and nothing else directly. `anon` holds no privilege on any table. See blueprint section 4 for the
 full picture and `supabase/tests/access_control_test.sql` for the pgTAP suite that verifies it in CI.
 
-- An auth account can outlive its claim, and nothing can clean it up without the service role key.
-  Two ways in: an admin rejects a claim, or the claim write fails after `signUp` already succeeded. The
-  person then holds a login that no admin can see. Retrying registration with the same address is the
-  only recovery, and it depends on Supabase returning the same user id rather than an obfuscated one
+- An auth account can end up with nothing in `members` or `registrations` pointing at it, and nothing
+  can clean it up without the service role key. Three ways in: an admin rejects a registration claim,
+  the claim write fails after `signUp` already succeeded, or an admin deletes an already-linked member
+  (`deleteMember` in `app/admin/members/page.tsx` removes only the `members` row, never the
+  `auth.users` account). The person then holds a login that no admin can see. For the first two,
+  retrying registration with the same address is a recovery, since Supabase returns the same user id
+  for a repeat `signUp` rather than an obfuscated one. The third has no such recovery: the account is
+  already confirmed, and its registration claim was already consumed when the member was linked
 
 ### Configuration and secrets
 
