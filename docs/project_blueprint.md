@@ -36,7 +36,7 @@
 * **Linking:** An administrator resolves each claim on `/admin/members`, either linking it to an existing member from a ranked list of suggestions or creating a new member.
 
 ## 5. Local Development
-* `npm run db:start`/`db:reset` bring up a local Docker Postgres, apply the migration chain, and run the pgTAP suite. There is no `supabase/config.toml`, so the full local stack (`supabase start`, with Auth and the REST gateway) does not come up. Develop against the hosted project for anything that needs a running API.
+* `npm run db:start` brings up a local Docker Postgres, `db:reset` applies the migration chain and seed data against it, and `db:test` runs the pgTAP suite. There is no `supabase/config.toml`, so the full local stack (`supabase start`, with Auth and the REST gateway) does not come up. Develop against the hosted project for anything that needs a running API.
 * `npm run dev` for normal local frontend development. The script uses Webpack instead of Turbopack to avoid filesystem and HMR issues on mounted workspaces.
 * `npx vercel dev` only when testing Vercel's Python/serverless-function emulation.
 * Fake club member data (e.g., "Max Mustermann") is seeded by `supabase/seed.sql`, which only inserts rows. The schema itself lives in `supabase/migrations/`, applied in order by `npm run db:reset`.
