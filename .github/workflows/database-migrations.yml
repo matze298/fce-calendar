@@ -41,3 +41,6 @@ jobs:
           # Verify the database schema matches what's expected
           # This ensures no syntax errors in the SQL files
           supabase db lint
+
+      - name: Verify Access Control Policies
+        run: supabase test db --local supabase/tests
