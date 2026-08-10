@@ -9,7 +9,11 @@ export async function POST() {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   try {
-    const { data: members } = await supabase.from('members').select('*').eq('exempt', false);
+    const { data: members } = await supabase
+      .from('members')
+      .select('*')
+      .eq('exempt', false)
+      .eq('is_approved', true);
     const { data: workDates } = await supabase.from('work_dates').select('*').order('date', { ascending: true });
     const { data: publishedAssignments } = await supabase
       .from('assignments')

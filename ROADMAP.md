@@ -49,11 +49,15 @@ Blueprint section 4 requires strict RLS. None of it is in place.
   (`api/cron/send_reminders.py`, `app/api/generate/route.ts`). They are indistinguishable from a browser
   visitor, which is what forces the permissive policies above. Adding `SUPABASE_SERVICE_ROLE_KEY` and
   using it server side is a prerequisite for tightening anything else
-- Registration claims an existing row by email. `app/register/page.tsx` runs
-  `update({ auth_id }).eq('email', email)` when that address already exists, which combined with the open
-  `members` policy is the shortest path into someone else's record
 - `utils/adminGuard.ts` is a UI convenience check only, as its own docstring states. Every admin page
   redirect can be bypassed by calling Supabase directly
+- The new `registrations` table grants `INSERT` to `anon` and everything else to `authenticated`, which
+  still means any logged-in user can read and delete claims. Narrow it to admins with the rest of the
+  RLS rework
+- An auth account can outlive its claim, and nothing can clean it up without the service role key.
+  Two ways in: an admin rejects a claim, or the claim write fails after `signUp` already succeeded. The
+  person then holds a login that no admin can see. Retrying registration with the same address is the
+  only recovery, and it depends on Supabase returning the same user id rather than an obfuscated one
 
 Sequencing note: a policy on `members` that queries `members` recurses. The usual fixes are a
 `SECURITY DEFINER` helper or moving `is_admin` into the JWT app metadata. That choice is still open.
@@ -150,6 +154,13 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 - A clearer message when Supabase is unreachable, rather than passing the raw browser fetch error
   through as "Anmeldung fehlgeschlagen: NetworkError ..."
 - Mobile polish for the admin screens, which are laid out desktop first
+- **If `utils/memberMatch.ts` suggestions ever prove too noisy or too sparse in real use, score the
+  surname and the given name separately and weight the surname heavily, rather than moving the single
+  global threshold.** Bigram similarity over the joined name conflates two signals of very different
+  value: a different person sharing a surname scores 0.512, a different person sharing a given name
+  scores 0.417, yet a surname is far more identifying. The current `+0.05` surname boost only breaks
+  near ties and is overridden whenever the raw scores already differ by more than that, so it cannot
+  fix a genuinely wrong ranking on its own
 
 ## Decided, no action
 

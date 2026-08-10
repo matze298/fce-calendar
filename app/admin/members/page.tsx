@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { checkAdminAccess } from '@/utils/adminGuard';
+import { findMemberCandidates, type MatchSuggestion } from '@/utils/memberMatch';
 
 type Member = {
   id: string;
@@ -15,13 +16,24 @@ type Member = {
   historical_shifts: number;
   is_approved: boolean;
   is_admin: boolean;
+  auth_id: string | null;
   created_at: string;
   availability?: string;
   exempt?: boolean;
 };
 
+type Registration = {
+  id: string;
+  auth_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  created_at: string;
+};
+
 export default function ManageMembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
@@ -49,7 +61,11 @@ export default function ManageMembersPage() {
         return;
       }
 
-      setMembers(await fetchMembers());
+      const { members: loadedMembers, registrations: loadedRegistrations } =
+        await fetchMembersAndRegistrations();
+
+      setMembers(loadedMembers);
+      setRegistrations(loadedRegistrations);
       setLoading(false);
     };
 
@@ -64,6 +80,87 @@ export default function ManageMembersPage() {
 
     if (error) alert(error.message);
     else setMembers(await fetchMembers());
+  };
+
+  const linkRegistration = async (
+    registration: Registration,
+    member: { id: string; name: string; auth_id: string | null },
+  ) => {
+    if (member.auth_id) {
+      const confirmed = confirm(
+        `${member.name} ist bereits mit einem Konto verknüpft. Wenn Sie fortfahren, verliert die ` +
+          'bisher verknüpfte Person den Zugriff auf dieses Mitglied. Trotzdem verknüpfen?',
+      );
+      if (!confirmed) return;
+    }
+
+    const { error } = await supabase
+      .from('members')
+      .update({
+        auth_id: registration.auth_id,
+        email: registration.email,
+        is_approved: true,
+      })
+      .eq('id', member.id);
+
+    if (error) {
+      alert('Verknüpfen fehlgeschlagen: ' + error.message);
+      return;
+    }
+
+    const { error: deleteError } = await supabase.from('registrations').delete().eq('id', registration.id);
+
+    if (deleteError) {
+      alert('Mitglied wurde verknüpft, aber die Registrierung konnte nicht entfernt werden: ' + deleteError.message);
+      return;
+    }
+
+    const { members: loadedMembers, registrations: loadedRegistrations } =
+      await fetchMembersAndRegistrations();
+    setMembers(loadedMembers);
+    setRegistrations(loadedRegistrations);
+  };
+
+  const createMemberFromRegistration = async (registration: Registration) => {
+    const { error } = await supabase.from('members').insert({
+      auth_id: registration.auth_id,
+      email: registration.email,
+      name: `${registration.first_name} ${registration.last_name}`,
+      is_approved: true,
+      is_admin: false,
+    });
+
+    if (error) {
+      alert('Anlegen fehlgeschlagen: ' + error.message);
+      return;
+    }
+
+    const { error: deleteError } = await supabase.from('registrations').delete().eq('id', registration.id);
+
+    if (deleteError) {
+      alert('Mitglied wurde angelegt, aber die Registrierung konnte nicht entfernt werden: ' + deleteError.message);
+      return;
+    }
+
+    const { members: loadedMembers, registrations: loadedRegistrations } =
+      await fetchMembersAndRegistrations();
+    setMembers(loadedMembers);
+    setRegistrations(loadedRegistrations);
+  };
+
+  const rejectRegistration = async (registration: Registration) => {
+    if (!confirm(`Registrierung von ${registration.first_name} ${registration.last_name} ablehnen?`)) {
+      return;
+    }
+
+    const { error } = await supabase.from('registrations').delete().eq('id', registration.id);
+
+    if (error) {
+      alert('Ablehnen fehlgeschlagen: ' + error.message);
+      return;
+    }
+
+    setRegistrations(await fetchRegistrations());
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -220,6 +317,126 @@ export default function ManageMembersPage() {
 
           {/* Pending & Approved Members List */}
           <div className="lg:col-span-2 space-y-12">
+            {registrations.length > 0 && (
+              <section>
+                <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3 mb-6">
+                  Ausstehende Registrierungen
+                  <span className="ml-2 bg-secondary text-white text-[10px] px-2 py-0.5 rounded-full align-middle">
+                    {registrations.length}
+                  </span>
+                </h2>
+                <div className="space-y-3">
+                  {registrations.map((registration) => {
+                    const suggestions = findMemberCandidates(
+                      {
+                        firstName: registration.first_name,
+                        lastName: registration.last_name,
+                        email: registration.email,
+                      },
+                      members,
+                    );
+
+                    return (
+                      <div
+                        key={registration.id}
+                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"
+                      >
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div>
+                            <p className="font-bold text-secondary">
+                              {registration.first_name} {registration.last_name}
+                            </p>
+                            <p className="text-xs text-muted">{registration.email}</p>
+                            <p className="text-[10px] text-muted mt-1">
+                              Registriert am {new Date(registration.created_at).toLocaleDateString('de-DE')}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => rejectRegistration(registration)}
+                            className="text-xs font-bold text-red-600 hover:underline"
+                          >
+                            Ablehnen
+                          </button>
+                        </div>
+
+                        {suggestions.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-[10px] uppercase font-bold text-muted">
+                              Mögliche Zuordnung
+                            </p>
+                            {suggestions.map((suggestion) => (
+                              <button
+                                key={suggestion.member.id}
+                                onClick={() => linkRegistration(registration, suggestion.member)}
+                                className="w-full text-left p-2 rounded-lg border-2 border-gray-100 hover:border-primary transition-colors"
+                              >
+                                <span className="font-bold text-secondary text-sm">
+                                  Mit {suggestion.member.name} verknüpfen
+                                </span>
+                                {suggestion.member.is_admin && (
+                                  <span className="ml-2 text-[10px] font-bold text-white bg-red-600 px-2 py-0.5 rounded-full uppercase align-middle">
+                                    Administrator
+                                  </span>
+                                )}
+                                {suggestion.member.auth_id && (
+                                  <span className="ml-2 text-[10px] font-bold text-white bg-secondary px-2 py-0.5 rounded-full uppercase align-middle">
+                                    Bereits verknüpft
+                                  </span>
+                                )}
+                                <span className="text-xs text-muted">
+                                  {' '}
+                                  · {suggestion.member.historical_shifts} Dienste ·{' '}
+                                  {suggestion.member.email} · {suggestionLabel(suggestion)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-xs text-muted italic">
+                            Kein passender Eintrag gefunden.
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                          <select
+                            defaultValue=""
+                            onChange={(e) => {
+                              const target = e.target;
+                              const memberId = target.value;
+                              if (!memberId) return;
+
+                              // Reset immediately so re-selecting the same member after a failed
+                              // link still fires a change event instead of appearing dead.
+                              target.value = '';
+
+                              const member = members.find((candidate) => candidate.id === memberId);
+                              if (member) linkRegistration(registration, member);
+                            }}
+                            className="flex-grow p-2 border rounded-lg text-sm"
+                          >
+                            <option value="">Manuell zuordnen…</option>
+                            {members.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} ({m.email})
+                                {m.is_admin ? ' · Administrator' : ''}
+                                {m.auth_id ? ' · bereits verknüpft' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => createMemberFromRegistration(registration)}
+                            className="bg-secondary text-white px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all"
+                          >
+                            Als neues Mitglied anlegen
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
             {pendingMembers.length > 0 && (
               <section className="bg-primary/10 p-6 rounded-2xl border-2 border-primary border-dashed">
                 <h2 className="text-xl font-bold text-secondary mb-4 flex items-center gap-2">
@@ -416,4 +633,32 @@ async function fetchMembers(): Promise<Member[]> {
     .order('name');
 
   return data ?? [];
+}
+
+async function fetchRegistrations(): Promise<Registration[]> {
+  const { data } = await supabase
+    .from('registrations')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  return data ?? [];
+}
+
+/**
+ * Both readers in one round trip. A plain module-level function rather than a component callback,
+ * so the mount effect can call it without pulling a memoized closure into its dependency graph.
+ */
+async function fetchMembersAndRegistrations(): Promise<{
+  members: Member[];
+  registrations: Registration[];
+}> {
+  const [members, registrations] = await Promise.all([fetchMembers(), fetchRegistrations()]);
+  return { members, registrations };
+}
+
+/** How a suggestion earned its place, for the admin deciding whether to trust it. */
+function suggestionLabel(suggestion: MatchSuggestion): string {
+  if (suggestion.reason === 'exact-email') return 'E-Mail identisch';
+  if (suggestion.reason === 'exact-name') return 'Name identisch';
+  return `ähnlich (${Math.round(suggestion.score * 100)}%)`;
 }

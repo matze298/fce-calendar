@@ -58,9 +58,8 @@ To test the application on a mobile device within the same local network:
 If testing login on mobile, you must add `http://<YOUR_IP>:3000` to the **Redirect URLs** in your [Supabase Dashboard](https://supabase.com/dashboard) under *Authentication -> URL Configuration*.
 
 ## 5. Authentication & Permissions
-The system uses a two-stage approval process:
-- **Registration:** Anyone can create an account, but will initially have no access.
-- **Approval:** An administrator must approve new accounts in the Admin Dashboard (`is_approved`).
+- **Registration:** Anyone can create an account. This writes a claim to `registrations`, not a member row.
+- **Linking:** An administrator links the claim to an existing member, or creates a new one, on `/admin/members`. Suggestions are ranked by `utils/memberMatch.ts`, which normalizes German spelling variants so "Mueller" matches "Müller".
 - **Admin Status:** Only users with `is_admin = true` can access the dashboard and generate shifts.
 
 ## 5. Algorithm (Shift Generator)

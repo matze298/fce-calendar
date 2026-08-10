@@ -8,6 +8,8 @@ import Link from 'next/link';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,12 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('Bitte geben Sie Vor- und Nachnamen an.');
+      setLoading(false);
+      return;
+    }
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -39,32 +47,40 @@ export default function RegisterPage() {
 
     const authId = signUpData.user?.id;
 
-    if (authId) {
-      // Check if member already exists (from seed or manual entry)
-      const { data: existingMember } = await supabase
-        .from('members')
-        .select('id')
-        .eq('email', email)
-        .single();
+    /**
+     * Both dead ends leave an auth account with no claim for an admin to find. The cause is named
+     * so the person can report something actionable rather than "it did not work".
+     */
+    const claimWriteFailed = (cause: string) =>
+      `Konto erstellt, aber die Registrierung konnte nicht gespeichert werden (${cause}). Bitte wenden Sie sich an den Vorstand.`;
 
-      if (existingMember) {
-        // Link auth_id to existing member
-        await supabase
-          .from('members')
-          .update({ auth_id: authId })
-          .eq('email', email);
-      } else {
-        // Create a new pending member
-        await supabase
-          .from('members')
-          .insert({
-            auth_id: authId,
-            email,
-            name: email.split('@')[0], // Fallback name
-            is_approved: false,
-            is_admin: false
-          });
+    if (authId) {
+      const { error: claimError } = await supabase.from('registrations').insert({
+        auth_id: authId,
+        email,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+      });
+
+      // The same address returns the same auth user without creating a second one, so a repeat
+      // attempt collides on auth_id. That is a duplicate registration, not a failure.
+      if (claimError && claimError.code === '23505') {
+        setError('Diese Registrierung liegt bereits vor und wird von einem Administrator geprüft.');
+        setLoading(false);
+        return;
       }
+
+      if (claimError) {
+        console.error('Registration claim insert failed:', claimError);
+        setError(claimWriteFailed(claimError.code ? `${claimError.code}: ${claimError.message}` : claimError.message));
+        setLoading(false);
+        return;
+      }
+    } else {
+      console.error('signUp returned no user id, so no registration claim was written');
+      setError(claimWriteFailed('keine Benutzer-ID'));
+      setLoading(false);
+      return;
     }
 
     setSuccess(true);
@@ -86,7 +102,7 @@ export default function RegisterPage() {
               <div className="text-green-600 font-bold text-lg">Registrierung erfolgreich!</div>
               <p className="text-muted text-sm">
                 Bitte prüfen Sie Ihre E-Mails, um Ihr Konto zu bestätigen (falls konfiguriert).
-                Sie werden in Kürze zum Login weitergeleitet.
+                Ein Administrator ordnet Ihre Registrierung anschließend Ihrem Mitgliedseintrag zu.
               </p>
               <Link href="/login" className="block text-primary font-bold hover:underline">
                 Direkt zum Login →
@@ -94,6 +110,30 @@ export default function RegisterPage() {
             </div>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-secondary mb-1 uppercase">Vorname</label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-gray-100 focus:border-primary focus:outline-none text-secondary"
+                  placeholder="Thomas"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-secondary mb-1 uppercase">Nachname</label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-gray-100 focus:border-primary focus:outline-none text-secondary"
+                  placeholder="Müller"
+                  required
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-secondary mb-1 uppercase">Email Adresse</label>
                 <input
