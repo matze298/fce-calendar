@@ -869,3 +869,24 @@ test.describe('Admin Dashboard', () => {
     expect(size).toBeLessThan(500 * 1024);
   });
 });
+
+// GIVEN the generate endpoint, which deletes every draft assignment when it runs
+test.describe('POST /api/generate authentication', () => {
+  test('refuses a request carrying no bearer token', async ({ request }) => {
+    // WHEN it is called with no Authorization header
+    const response = await request.post('/api/generate');
+
+    // THEN it refuses, rather than wiping drafts for anyone who knows the URL
+    expect(response.status()).toBe(401);
+  });
+
+  test('refuses a request carrying a token it cannot resolve to a user', async ({ request }) => {
+    // WHEN it is called with a token that is not a valid session
+    const response = await request.post('/api/generate', {
+      headers: { Authorization: 'Bearer not-a-real-token' },
+    });
+
+    // THEN it refuses
+    expect(response.status()).toBe(401);
+  });
+});
