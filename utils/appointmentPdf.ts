@@ -21,7 +21,17 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
   // The source logo is 2065 x 2268, a ratio of 0.9105, so the box is deliberately not square.
   const logo = await loadLogoDataUrl();
   const textLeft = logo ? marginX + 24 : marginX;
-  if (logo) doc.addImage(logo, 'PNG', marginX, 14, 18, 19.8);
+  if (logo) {
+    doc.addImage({
+      imageData: logo,
+      format: 'PNG',
+      x: marginX,
+      y: 14,
+      width: 18,
+      height: 19.8,
+      compression: 'SLOW',
+    });
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
@@ -108,22 +118,46 @@ export async function downloadAppointmentPdf(data: AppointmentExport, today: Dat
   doc.save(`schichtplan-${formatFilenameDate(today)}.pdf`);
 }
 
-/** The logo as a data URL, or null when it cannot be read. A missing crest must not lose the export. */
+/**
+ * The logo as a data URL, downscaled to print resolution, or null when it cannot be read or drawn.
+ * A missing or unprocessable crest must not lose the export.
+ */
 async function loadLogoDataUrl(): Promise<string | null> {
   try {
     const response = await fetch('/fce-logo.png');
     if (!response.ok) return null;
 
     const blob = await response.blob();
-    return await new Promise<string | null>(resolve => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    const bitmap = await createImageBitmap(blob);
+    try {
+      return renderLogoToDataUrl(bitmap);
+    } finally {
+      bitmap.close();
+    }
   } catch {
     return null;
   }
+}
+
+/**
+ * Draws the source crest onto an offscreen canvas sized for print before jsPDF embeds it. The source
+ * is 2065 x 2268, about twenty times wider than the 18mm box needs, and jsPDF otherwise embeds
+ * whatever pixels it is given. 213 x 234 is 18mm at 300dpi, and 234 preserves the source's 0.9105
+ * ratio, so the crest is never squashed.
+ */
+function renderLogoToDataUrl(bitmap: ImageBitmap): string | null {
+  const width = 213;
+  const height = 234;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+
+  context.drawImage(bitmap, 0, 0, width, height);
+  return canvas.toDataURL('image/png');
 }
 
 /** autoTable records where it stopped on the document, but the jsPDF types do not know about it. */
@@ -133,7 +167,12 @@ function readFinalY(doc: jsPDF): number {
 }
 
 function buildSubtitle(data: AppointmentExport, today: Date): string {
-  const generated = `Erstellt am ${today.toLocaleDateString('de-DE')}`;
+  const generatedDate = today.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const generated = `Erstellt am ${generatedDate}`;
   if (!data.range) return generated;
 
   return `${formatLongDate(data.range.from)} bis ${formatLongDate(data.range.to)} · ${generated}`;
