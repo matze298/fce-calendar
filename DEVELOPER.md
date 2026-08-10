@@ -93,6 +93,7 @@ The system sends automated email reminders for shifts happening in exactly 7 day
 ### Environment Setup
 Add the following to your `.env.local`:
 - `CRON_SECRET`: A random string (e.g., `super-secret-123`). In production, Vercel provides this automatically.
+- `SUPABASE_SERVICE_ROLE_KEY`: The service role key from *Settings -> API*. The cron runs on a schedule with no user session, so it reads `members.email` with this key instead of the anon key. **Warning:** this key bypasses Row Level Security entirely. It belongs only in server-side configuration and must never appear in a `NEXT_PUBLIC_` variable or reach the browser.
 - `RESEND_API_KEY`: Your API key from [Resend](https://resend.com).
 - `DEVELOPMENT_EMAIL_OVERRIDE` (Optional): Set this to your own email address to redirect **all** reminder emails to yourself during testing, regardless of the member's email in the database.
 - `REMINDERS_LIVE` (Production only): Set to `true` to allow reminders to reach the addresses stored in the `members` table.
