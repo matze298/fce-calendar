@@ -8,6 +8,8 @@ import Link from 'next/link';
 import { toTimeInputValue, parseIsoDate } from '@/utils/startTime';
 import { checkAdminAccess } from '@/utils/adminGuard';
 import { errorMessage } from '@/utils/errors';
+import { buildAppointmentExport } from '@/utils/appointmentExport';
+import { downloadAppointmentPdf } from '@/utils/appointmentPdf';
 
 interface Member {
   id: string;
@@ -46,6 +48,8 @@ export default function AdminDashboard() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
+  const [includePastExport, setIncludePastExport] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const router = useRouter();
 
   const fetchData = useCallback(async () => {
@@ -164,6 +168,25 @@ export default function AdminDashboard() {
       alert('Fehler beim Zurücksetzen: ' + errorMessage(err));
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    setIsExporting(true);
+    try {
+      const today = new Date();
+      const data = buildAppointmentExport({
+        workDates,
+        assignments,
+        includePast: includePastExport,
+        today,
+      });
+
+      await downloadAppointmentPdf(data, today);
+    } catch (err) {
+      alert('PDF-Export fehlgeschlagen: ' + errorMessage(err));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -437,6 +460,35 @@ export default function AdminDashboard() {
                 <p className="text-muted italic">Keine Arbeitstage gefunden. Führen Sie das Setup-Script in Supabase aus.</p>
               </div>
             )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-2xl font-bold text-secondary border-l-4 border-primary pl-3 mb-6">
+            Export
+          </h2>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-secondary font-medium">
+                Dienstplan als PDF zum Aushängen und Verteilen.
+              </p>
+              <label className="flex items-center gap-2 mt-2 text-xs text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includePastExport}
+                  onChange={(e) => setIncludePastExport(e.target.checked)}
+                  className="accent-primary"
+                />
+                Vergangene Termine einschließen
+              </label>
+            </div>
+            <button
+              onClick={exportPdf}
+              disabled={isExporting}
+              className="bg-secondary text-white px-5 py-3 rounded-xl font-bold hover:opacity-90 transition-all disabled:opacity-50 whitespace-nowrap"
+            >
+              {isExporting ? 'Wird erstellt...' : 'Als PDF exportieren'}
+            </button>
           </div>
         </section>
 

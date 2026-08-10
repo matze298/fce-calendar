@@ -34,6 +34,8 @@ Next.js and Vercel Serverless Functions handle backend logic. For Python devs, t
 - **`utils/adminGuard.ts`**: `checkAdminAccess()`, the shared admin check for the `/admin` pages. A UI convenience only, not a security boundary.
 - **`utils/errors.ts`**: `errorMessage()`, for the message of a caught value that may not be an `Error`.
 - **`utils/memberMatch.ts`**: Ranks existing members against a registration claim, normalizing German spelling variants so "Mueller" matches "Müller". Used only by the admin UI.
+- **`utils/appointmentExport.ts`**: Turns work dates and published assignments into the two tables the PDF export prints. Pure, and where the export's rules live.
+- **`utils/appointmentPdf.ts`**: Renders those tables as an A4 PDF with jsPDF. Imports jsPDF lazily so it stays out of the initial bundle.
 - **`next.config.ts`**: Framework configuration (similar to `pyproject.toml` or `settings.py`).
 
 ## 🧠 Key Concepts for Python Developers

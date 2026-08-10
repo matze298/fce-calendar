@@ -1,6 +1,17 @@
 // Tests for the Admin dasbhoard using Playwright.
 
+import fs from 'node:fs';
+
 import { test, expect } from '@playwright/test';
+
+/** A YYYY-MM-DD date offset from the real clock, since the export button reads `new Date()`. */
+function isoDateDaysFromNow(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 test.describe('Admin Dashboard', () => {
   test.beforeEach(async ({ page }) => {
@@ -763,5 +774,98 @@ test.describe('Admin Dashboard', () => {
     // AND the resolved claim is removed from the registrations table
     await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
     expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
+  });
+
+  test('Exporting the schedule downloads a PDF with both tables populated', async ({ page }) => {
+    // GIVEN two future work dates and one member published on both, so the appointments table and the
+    // frequent-members table (which needs a count above one) are both genuinely non-empty. The
+    // beforeEach fixture alone would leave both tables empty, since its one work date is in the past
+    // relative to this test run and it carries no assignments.
+    const firstDate = isoDateDaysFromNow(30);
+    const secondDate = isoDateDaysFromNow(45);
+
+    await page.route(url => url.href.includes('/rest/v1/work_dates'), async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: '201',
+            date: firstDate,
+            name: 'Heimspiel gegen SV Musterhausen',
+            start_time: '19:00:00',
+            required_people: 2,
+            is_important_shift: false,
+            is_weekend: false,
+          },
+          {
+            id: '202',
+            date: secondDate,
+            name: 'Vereinsfest',
+            start_time: '15:00:00',
+            required_people: 1,
+            is_important_shift: false,
+            is_weekend: false,
+          },
+        ]),
+      });
+    });
+
+    await page.route(url => url.href.includes('/rest/v1/assignments'), async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { id: '301', workdate_id: '201', member_id: '1', status: 'Published', members: { name: 'Max Mustermann' } },
+          { id: '302', workdate_id: '202', member_id: '1', status: 'Published', members: { name: 'Max Mustermann' } },
+          { id: '303', workdate_id: '201', member_id: '2', status: 'Published', members: { name: 'Erika Musterfrau' } },
+        ]),
+      });
+    });
+
+    await page.goto('/admin');
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 15000 });
+
+    // WHEN exporting
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Als PDF exportieren' }).click();
+    const download = await downloadPromise;
+
+    // THEN a dated PDF arrives
+    expect(download.suggestedFilename()).toMatch(/^schichtplan-\d{4}-\d{2}-\d{2}\.pdf$/);
+
+    // THEN both the appointment name and the assigned member appear in the file, which only happens if
+    // autoTable actually drew both tables rather than the "no data" placeholder text
+    const downloadPath = await download.path();
+    const raw = fs.readFileSync(downloadPath, 'latin1');
+    expect(raw).toContain('Heimspiel gegen SV Musterhausen');
+    expect(raw).toContain('Vereinsfest');
+    // The fixture carries 19:00:00 and 15:00:00, so a trimmed time has to reach the page. Without
+    // this the Uhrzeit column could silently render a dash for every row and nothing would fail.
+    expect(raw).toContain('19:00');
+    expect(raw).toContain('15:00');
+    expect(raw).toContain('Max Mustermann');
+    expect(raw).not.toContain('Keine Termine im gewählten Zeitraum.');
+    expect(raw).not.toContain('Keine Dienste im gewählten Zeitraum vergeben.');
+
+    // THEN a member holding a single duty reaches the sheet too, appearing both among the assigned
+    // names and again in the per-member table. Counting is what makes this discriminate: her name in
+    // the appointments table alone would satisfy a plain toContain even if the second table dropped
+    // everyone below two duties, which is exactly what it used to do
+    const erikaMentions = raw.split('Erika Musterfrau').length - 1;
+    expect(erikaMentions).toBeGreaterThanOrEqual(2);
+
+    // THEN the file stays well under the size of the 18.8 MB regression once caused by embedding the
+    // crest at full resolution instead of downscaling it for print
+    const { size } = fs.statSync(downloadPath);
+    expect(size).toBeLessThan(500 * 1024);
   });
 });
