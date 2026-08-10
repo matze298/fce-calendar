@@ -487,6 +487,14 @@ export default function ManageMembersPage() {
                             ✓ Registriert
                           </span>
                         )}
+                        {m.is_admin && (
+                          <span
+                            title="Dieses Mitglied hat vollen Zugriff auf den Admin-Bereich"
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white whitespace-nowrap"
+                          >
+                            Administrator
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted">{m.email}</p>
                     </div>

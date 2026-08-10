@@ -169,17 +169,20 @@ test.describe('Admin Dashboard', () => {
     await expect(page.locator('body')).toContainText('2 Personen');
   });
 
-  test('The member list marks who has an account and leaves the rest unmarked', async ({ page }) => {
-    // GIVEN the member list, where the fixture gives Erika an auth_id and Max none
+  test('The member list marks account and admin status independently', async ({ page }) => {
+    // GIVEN the member list. The fixture gives Erika an auth_id and no admin rights, and Max admin
+    // rights and no auth_id, so the two badges can be told apart rather than moving together
     await page.goto('/admin/members');
     await expect(page.locator('body')).toContainText('Erika Musterfrau', { timeout: 15000 });
 
-    // THEN the member with a linked login is marked, scoped to her own row
+    // THEN the member with a linked login is marked as registered but not as an admin
     const erika = page.getByRole('heading', { name: 'Erika Musterfrau' }).locator('..');
     await expect(erika).toContainText('Registriert');
+    await expect(erika).not.toContainText('Administrator');
 
-    // THEN the member without one is not, which is what makes the badge meaningful
+    // THEN the admin without a login is marked as an admin but not as registered
     const max = page.getByRole('heading', { name: 'Max Mustermann' }).locator('..');
+    await expect(max).toContainText('Administrator');
     await expect(max).not.toContainText('Registriert');
   });
 
