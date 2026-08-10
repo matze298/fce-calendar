@@ -72,9 +72,24 @@ follow-up, or the policies ship unverified.
 - Real Supabase URL and anon key in Vercel and in each developer's `.env.local`
 - `CRON_SECRET` actually set in Vercel. The endpoint now refuses to run when it is unset, so a missing
   secret fails closed rather than accepting `Bearer None`
-- Resend domain verification for the `info@fcegenhausen.de` sender
+- Resend domain verification for the `info@fcegenhausen.de` sender, without which every reminder is
+  rejected at the provider
+- `REMINDERS_LIVE=true` in Vercel, and nowhere else. Reminders send to nobody until it is set, so
+  go-live needs it, and a preview or development environment must never have it. Vercel environment
+  variables are per-environment for exactly this reason
 - `DEVELOPMENT_EMAIL_OVERRIDE` must be unset in production, or every reminder for every member goes to
   that one address
+- Custom SMTP for Supabase Auth, pointed at Resend. The built-in sender is development-only and capped
+  at a handful of confirmation emails per hour, so registration fails with `email rate limit exceeded`
+  the moment more than a few people sign up on the same day
+- **Re-enable "Confirm email" in Supabase Auth.** It is currently switched off so that development is
+  not throttled by that rate limit. Two reasons it has to come back before real data:
+  registration otherwise accepts an address nobody has proved they own, and, more sharply, `signUp`
+  returns a session immediately, so anyone who registers instantly holds the `authenticated` role.
+  Under today's policies that role can write every row in every table, so confirmation-off and
+  permissive RLS is a bad pairing. Sequence it with the RLS rework rather than after it. This also
+  depends on custom SMTP above, since re-enabling it against the built-in sender reintroduces the
+  rate limit
 - Supabase Auth redirect URLs for the production hostname. See `DEVELOPER.md` section 4
 - GitHub's native secret scanning with push protection, a repository setting that blocks a push
   containing a credential. The CI gitleaks job catches one after the fact, which is weaker
@@ -123,8 +138,11 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 6. Wait for Vercel to issue the TLS certificate, then confirm the subdomain serves over HTTPS
 7. Add the production URL to the Supabase Auth redirect URLs, otherwise login redirects fail off
    localhost
-8. Verify the reminder cron by calling the endpoint with the configured `CRON_SECRET`
-9. Link to the subdomain from the existing site's navigation
+8. Verify the reminder cron by calling the endpoint with the configured `CRON_SECRET`. It reports its
+   mode, so confirm it says `live` rather than `dry-run` once `REMINDERS_LIVE` is set
+9. Switch "Confirm email" back on in Supabase Auth, after custom SMTP is in place. See the access
+   control section for why leaving it off is worse than an unverified address
+10. Link to the subdomain from the existing site's navigation
 
 ### Constraints to check before relying on it
 

@@ -80,22 +80,48 @@ class handler(BaseHTTPRequestHandler):  # noqa:N801
                 if a.members and a.work_dates and a.work_dates.date == target_date
             ]
 
-            sent_count = 0
             email_override = os.getenv("DEVELOPMENT_EMAIL_OVERRIDE")
+
+            # Mailing the addresses in the members table has to be asked for. Any environment holding
+            # a copy of the seed data holds addresses at real third-party domains, so a default that
+            # sends wherever the table points would reach strangers from a developer's machine.
+            if email_override:
+                mode = "override"
+            elif os.getenv("REMINDERS_LIVE", "").lower() == "true":
+                mode = "live"
+            else:
+                mode = "dry-run"
+
+            sent_count = 0
+            suppressed_count = 0
 
             for member, work_date in due_reminders:
                 email = email_override or member.email
 
-                if email and member.name:
-                    self._send_reminder_email(email, member.name, work_date)
-                    sent_count += 1
+                if not email or not member.name:
+                    continue
+
+                if mode == "dry-run":
+                    suppressed_count += 1
+                    continue
+
+                self._send_reminder_email(email, member.name, work_date)
+                sent_count += 1
 
             # Success Response
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(
-                json.dumps({"status": "success", "target_date": target_date, "sent_reminders": sent_count}).encode()
+                json.dumps(
+                    {
+                        "status": "success",
+                        "mode": mode,
+                        "target_date": target_date,
+                        "sent_reminders": sent_count,
+                        "suppressed_reminders": suppressed_count,
+                    }
+                ).encode()
             )
 
         except Exception as e:  # noqa: BLE001

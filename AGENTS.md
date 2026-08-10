@@ -53,6 +53,14 @@ def test_fairness_distribution():
     assert result[0].member_id == member_with_zero_shifts.id
 ```
 
+## Email Addresses in Test and Seed Data
+
+Every made-up address must use **`@example.com`**, which RFC 2606 reserves so it can never receive mail. This covers seed data, test fixtures, mocks and documentation examples.
+
+Do not invent a domain that looks plausibly German. It has cost us already: the seed data once used `mueller.de`, `schmidt.de`, `fischer.de` and `weber.de`, and every one of those turned out to be a real registered domain with live MX records at retarus, Microsoft 365 and a hydraulics company. The test fixtures used `fce.de` and `example.de`, both also real and both accepting mail.
+
+`example.de` is not reserved either. Only `example.com`, `example.net` and `example.org` are, along with the `.test`, `.invalid` and `.localhost` TLDs. The existing `dev@localhost.test` account is fine on that basis.
+
 ## Python Standards
 
 - **Imports:** Never use relative imports for Python unless unavoidable, such as in tests. Prefer absolute imports starting from the project root (for example, `from api.models import Member`).
