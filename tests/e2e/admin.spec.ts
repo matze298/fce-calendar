@@ -764,4 +764,18 @@ test.describe('Admin Dashboard', () => {
     await expect.poll(() => deletedRegistrationUrl, { timeout: 15000 }).not.toBeNull();
     expect(deletedRegistrationUrl).toContain('id=eq.reg-1');
   });
+
+  test('Exporting the schedule downloads a PDF', async ({ page }) => {
+    // GIVEN the loaded dashboard
+    await page.goto('/admin');
+    await expect(page.locator('.animate-pulse')).not.toBeVisible({ timeout: 15000 });
+
+    // WHEN exporting
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Als PDF exportieren' }).click();
+    const download = await downloadPromise;
+
+    // THEN a dated PDF arrives, which is the only proof jsPDF runs in a real browser
+    expect(download.suggestedFilename()).toMatch(/^schichtplan-\d{4}-\d{2}-\d{2}\.pdf$/);
+  });
 });
