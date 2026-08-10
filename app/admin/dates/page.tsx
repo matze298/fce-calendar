@@ -133,7 +133,7 @@ export default function ManageDatesPage() {
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/admin">
-              <Image src="/fce-logo.png" alt="Logo" width={40} height={40} className="hover:opacity-80 transition-opacity cursor-pointer" />
+              <Image src="/fce-logo.png" alt="Logo" width={40} height={44} className="hover:opacity-80 transition-opacity cursor-pointer" />
             </Link>
             <h1 className="text-xl font-bold">Termin-Management</h1>
           </div>

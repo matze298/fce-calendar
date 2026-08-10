@@ -238,8 +238,7 @@ export default function AdminDashboard() {
               src="/fce-logo.png"
               alt="Logo"
               width={40}
-              height={40}
-              style={{ width: '40px', height: 'auto' }}
+              height={44}
             />
             <h1 className="text-xl font-bold">Admin-Bereich</h1>
           </div>

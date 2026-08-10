@@ -40,9 +40,8 @@ export default function LoginPage() {
             src="/fce-logo.png"
             alt="FCE Logo"
             width={80}
-            height={80}
+            height={88}
             priority
-            style={{ width: '80px', height: 'auto' }}
             className="mb-4 drop-shadow-lg"
           />
           <h1 className="text-2xl font-bold uppercase tracking-wider text-primary">
