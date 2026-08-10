@@ -31,7 +31,8 @@ export type MemberShiftSummary = {
 
 export type AppointmentExport = {
   appointments: ExportAppointment[];
-  frequentMembers: MemberShiftSummary[];
+  /** Every member holding at least one duty in range. A member with none does not appear. */
+  memberShifts: MemberShiftSummary[];
   /** The span the document covers, for its subtitle. Null when nothing is in range. */
   range: { from: string; to: string } | null;
 };
@@ -82,7 +83,7 @@ export function buildAppointmentExport({
 
   for (const a of published) {
     const date = dateByWorkDateId.get(a.workdate_id);
-    // Outside the kept range, so it must not push anyone over the threshold.
+    // Outside the kept range, so it must neither be counted nor listed.
     if (!date) continue;
 
     const entry = shiftsByMember.get(a.member_id) ?? { name: a.members.name, dates: [] };
@@ -90,8 +91,7 @@ export function buildAppointmentExport({
     shiftsByMember.set(a.member_id, entry);
   }
 
-  const frequentMembers = [...shiftsByMember.values()]
-    .filter(entry => entry.dates.length > 1)
+  const memberShifts = [...shiftsByMember.values()]
     .map(entry => ({
       name: entry.name,
       count: entry.dates.length,
@@ -104,5 +104,5 @@ export function buildAppointmentExport({
       ? { from: appointments[0].date, to: appointments[appointments.length - 1].date }
       : null;
 
-  return { appointments, frequentMembers, range };
+  return { appointments, memberShifts, range };
 }

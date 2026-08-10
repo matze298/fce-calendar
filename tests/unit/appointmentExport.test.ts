@@ -136,8 +136,8 @@ describe('buildAppointmentExport appointments', () => {
   });
 });
 
-describe('buildAppointmentExport frequentMembers', () => {
-  it('lists members with more than one shift and leaves out those with exactly one', () => {
+describe('buildAppointmentExport memberShifts', () => {
+  it('lists every member holding a duty, including one with a single shift', () => {
     // GIVEN one member on two dates, supplied newest first, and another on a single date
     const workDates = [workDate('1', '2026-09-20'), workDate('2', '2026-10-05')];
     const assignments = [
@@ -149,10 +149,23 @@ describe('buildAppointmentExport frequentMembers', () => {
     // WHEN building the export
     const result = buildAppointmentExport({ workDates, assignments, includePast: false, today: TODAY });
 
-    // THEN only the member above one shift appears, with both dates ascending
-    expect(result.frequentMembers).toEqual([
+    // THEN both appear, the busier one first, and the single-shift member is not filtered out
+    expect(result.memberShifts).toEqual([
       { name: 'Anna Fischer', count: 2, dates: ['2026-09-20', '2026-10-05'] },
+      { name: 'Thomas Müller', count: 1, dates: ['2026-09-20'] },
     ]);
+  });
+
+  it('leaves out a member with no duty at all rather than listing them at zero', () => {
+    // GIVEN two members, only one of whom is assigned anything
+    const workDates = [workDate('1', '2026-09-20')];
+    const assignments = [assignment('1', 'm1', 'Anna Fischer')];
+
+    // WHEN building the export
+    const result = buildAppointmentExport({ workDates, assignments, includePast: false, today: TODAY });
+
+    // THEN the table covers who is working, not the whole roster
+    expect(result.memberShifts.map(m => m.name)).toEqual(['Anna Fischer']);
   });
 
   it('sorts by count descending, then by name', () => {
@@ -176,7 +189,7 @@ describe('buildAppointmentExport frequentMembers', () => {
     const result = buildAppointmentExport({ workDates, assignments, includePast: false, today: TODAY });
 
     // THEN the busiest comes first, and the two tied on count order by name
-    expect(result.frequentMembers.map(m => [m.name, m.count])).toEqual([
+    expect(result.memberShifts.map(m => [m.name, m.count])).toEqual([
       ['Berta Braun', 3],
       ['Anton Bauer', 2],
       ['Zacharias Weber', 2],
@@ -194,15 +207,17 @@ describe('buildAppointmentExport frequentMembers', () => {
     // WHEN building without past dates
     const upcoming = buildAppointmentExport({ workDates, assignments, includePast: false, today: TODAY });
 
-    // THEN she has only one shift in range, so she is not listed, and the table never references a
-    // date the reader cannot find above
-    expect(upcoming.frequentMembers).toEqual([]);
+    // THEN only the in-range shift is counted and listed, so the table never cites a date the reader
+    // cannot find in the appointments above
+    expect(upcoming.memberShifts).toEqual([
+      { name: 'Anna Fischer', count: 1, dates: ['2026-09-20'] },
+    ]);
 
     // WHEN building with past dates
     const all = buildAppointmentExport({ workDates, assignments, includePast: true, today: TODAY });
 
     // THEN both count and she appears
-    expect(all.frequentMembers).toEqual([
+    expect(all.memberShifts).toEqual([
       { name: 'Anna Fischer', count: 2, dates: ['2026-09-01', '2026-09-20'] },
     ]);
   });
@@ -218,8 +233,11 @@ describe('buildAppointmentExport frequentMembers', () => {
     // WHEN building the export
     const result = buildAppointmentExport({ workDates, assignments, includePast: false, today: TODAY });
 
-    // THEN the draft does not push her over the threshold
-    expect(result.frequentMembers).toEqual([]);
+    // THEN only the published shift is counted, so the draft is invisible here as well as in the
+    // appointments table
+    expect(result.memberShifts).toEqual([
+      { name: 'Anna Fischer', count: 1, dates: ['2026-09-20'] },
+    ]);
   });
 });
 
@@ -246,7 +264,7 @@ describe('buildAppointmentExport range', () => {
 
     // THEN the caller gets empty structures rather than an exception
     expect(result.appointments).toEqual([]);
-    expect(result.frequentMembers).toEqual([]);
+    expect(result.memberShifts).toEqual([]);
     expect(result.range).toBeNull();
   });
 });

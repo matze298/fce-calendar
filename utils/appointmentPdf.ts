@@ -92,7 +92,12 @@ export function renderAppointmentSections(
         `${appointment.assignedNames.length} / ${appointment.requiredPeople}`,
         appointment.assignedNames.join(', ') || '-',
       ]),
-      styles: { fontSize: 8, cellPadding: 1.5 },
+      styles: {
+        fontSize: 8,
+        cellPadding: 1.5,
+        lineWidth: { bottom: 0.1 },
+        lineColor: [203, 209, 214],
+      },
       headStyles: { fillColor: [0, 0, 0], textColor: 255 },
       alternateRowStyles: { fillColor: [248, 249, 250] },
       columnStyles: {
@@ -114,24 +119,29 @@ export function renderAppointmentSections(
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Mitglieder mit mehreren Diensten', MARGIN_X, cursorY);
+  doc.text('Dienste je Mitglied', MARGIN_X, cursorY);
   cursorY += 4;
 
-  if (data.frequentMembers.length === 0) {
+  if (data.memberShifts.length === 0) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Kein Mitglied hat mehr als einen Dienst.', MARGIN_X, cursorY + 5);
+    doc.text('Keine Dienste im gewählten Zeitraum vergeben.', MARGIN_X, cursorY + 5);
   } else {
     autoTable(doc, {
       startY: cursorY,
       margin: { left: MARGIN_X, right: MARGIN_X },
       head: [['Name', 'Anzahl', 'Termine']],
-      body: data.frequentMembers.map(member => [
+      body: data.memberShifts.map(member => [
         member.name,
         String(member.count),
         member.dates.map(formatShortDate).join(', '),
       ]),
-      styles: { fontSize: 8, cellPadding: 1.5 },
+      styles: {
+        fontSize: 8,
+        cellPadding: 1.5,
+        lineWidth: { bottom: 0.1 },
+        lineColor: [203, 209, 214],
+      },
       headStyles: { fillColor: [0, 0, 0], textColor: 255 },
       alternateRowStyles: { fillColor: [248, 249, 250] },
       columnStyles: {

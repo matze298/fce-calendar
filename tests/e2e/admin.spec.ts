@@ -826,6 +826,7 @@ test.describe('Admin Dashboard', () => {
         body: JSON.stringify([
           { id: '301', workdate_id: '201', member_id: '1', status: 'Published', members: { name: 'Max Mustermann' } },
           { id: '302', workdate_id: '202', member_id: '1', status: 'Published', members: { name: 'Max Mustermann' } },
+          { id: '303', workdate_id: '201', member_id: '2', status: 'Published', members: { name: 'Erika Musterfrau' } },
         ]),
       });
     });
@@ -849,7 +850,14 @@ test.describe('Admin Dashboard', () => {
     expect(raw).toContain('Vereinsfest');
     expect(raw).toContain('Max Mustermann');
     expect(raw).not.toContain('Keine Termine im gewählten Zeitraum.');
-    expect(raw).not.toContain('Kein Mitglied hat mehr als einen Dienst.');
+    expect(raw).not.toContain('Keine Dienste im gewählten Zeitraum vergeben.');
+
+    // THEN a member holding a single duty reaches the sheet too, appearing both among the assigned
+    // names and again in the per-member table. Counting is what makes this discriminate: her name in
+    // the appointments table alone would satisfy a plain toContain even if the second table dropped
+    // everyone below two duties, which is exactly what it used to do
+    const erikaMentions = raw.split('Erika Musterfrau').length - 1;
+    expect(erikaMentions).toBeGreaterThanOrEqual(2);
 
     // THEN the file stays well under the size of the 18.8 MB regression once caused by embedding the
     // crest at full resolution instead of downscaling it for print

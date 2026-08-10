@@ -25,7 +25,7 @@
 * *Cooldown:* Members are ineligible for a new shift if they have an assignment within a 3-week window (21 days) of the target date, counting assignments already published as well as those planned in the same run. This is a "soft" constraint: if no members are available without violating cooldown, the pool reverts to all eligible members for that phase to ensure the shift is filled.
 * *Existing work counts:* Published assignments count toward a member's fairness total and toward a date's `required_people`, and a member already on a date is never assigned to it twice.
 * *Configuration:* The cooldown period and the default start times per weekday bucket (Mon-Thu, Fri, Sat/Sun) are stored in the `settings` table and editable under `/admin/settings`.
-* *Export:* The admin dashboard produces a printable A4 PDF of the schedule, carrying the club logo, a table of appointments with the people assigned to each, and a table of members with more than one shift. Published assignments only, upcoming dates by default, with an opt-in for past dates.
+* *Export:* The admin dashboard produces a printable A4 PDF of the schedule, carrying the club logo, a table of appointments with the people assigned to each, and a table listing every member's duties. Published assignments only, upcoming dates by default, with an opt-in for past dates.
 
 ## 4. Security & GDPR (Germany/EU Standards)
 * Strict Row Level Security (RLS) in Supabase. **Target, not current.** Every table still grants `FOR ALL TO authenticated USING (true)`, and `anon` can read all member rows. See `ROADMAP.md` in the repository root, which tracks this as a blocker for holding real member data.
