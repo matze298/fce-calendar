@@ -1,112 +1,3 @@
--- ==========================================
--- 1. FC Egenhausen Shift Calendar: Master Setup
--- This script contains the Schema + GDPR RLS + Seed Data
--- ==========================================
-
--- 0. Clean up existing objects for a fresh start
-DROP TABLE IF EXISTS assignments CASCADE;
-DROP TABLE IF EXISTS work_dates CASCADE;
-DROP TABLE IF EXISTS members CASCADE;
-DROP TABLE IF EXISTS settings CASCADE;
-DROP TABLE IF EXISTS registrations CASCADE;
-
-DROP TYPE IF EXISTS seniority_type CASCADE;
-DROP TYPE IF EXISTS availability_type CASCADE;
-DROP TYPE IF EXISTS assignment_status CASCADE;
-
--- 1. Custom Types
-CREATE TYPE seniority_type AS ENUM ('Senior', 'Standard', 'Junior');
-CREATE TYPE availability_type AS ENUM ('Any', 'Weekends', 'Weekdays');
-CREATE TYPE assignment_status AS ENUM ('Draft', 'Published');
-
--- 2. Members Table (GDPR: Minimal data)
-CREATE TABLE members (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_id UUID UNIQUE, -- Link to auth.users
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  seniority_level seniority_type NOT NULL DEFAULT 'Standard',
-  availability availability_type NOT NULL DEFAULT 'Any',
-  historical_shifts INT NOT NULL DEFAULT 0,
-  exempt BOOLEAN NOT NULL DEFAULT FALSE,
-  is_approved BOOLEAN NOT NULL DEFAULT FALSE, -- Admin must approve
-  is_admin BOOLEAN NOT NULL DEFAULT FALSE,    -- Admin privileges
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 3. WorkDates Table
-CREATE TABLE work_dates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  date DATE NOT NULL UNIQUE,
-  name TEXT,
-  start_time TIME,
-  required_people INT NOT NULL DEFAULT 1,
-  is_important_shift BOOLEAN NOT NULL DEFAULT FALSE,
-  is_weekend BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 4. Assignments Table (GDPR: Cascade delete for anonymization/erasure)
-CREATE TABLE assignments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  workdate_id UUID NOT NULL REFERENCES work_dates(id) ON DELETE CASCADE,
-  status assignment_status NOT NULL DEFAULT 'Draft',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(member_id, workdate_id)
-);
-
--- 5. Settings Table (Scheduler configuration)
-CREATE TABLE settings (
-  id INT PRIMARY KEY DEFAULT 1,
-  cooldown_days INT NOT NULL DEFAULT 21,
-  default_start_time_mon_thu TIME NOT NULL DEFAULT '20:00',
-  default_start_time_fri TIME NOT NULL DEFAULT '20:00',
-  default_start_time_sat_sun TIME NOT NULL DEFAULT '15:30',
-  last_updated TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT one_row_only CHECK (id = 1)
-);
-
--- 6. Registrations Table (a login awaiting an admin decision)
-CREATE TABLE registrations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_id UUID UNIQUE NOT NULL,
-  email TEXT NOT NULL,
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 7. Row Level Security (RLS) - GDPR Compliance
-ALTER TABLE members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE work_dates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE assignments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
-
--- Strict Admin-Only Policies (Updated for Prototype)
--- Allow 'anon' to read so we can see the calendar without login
--- Allow 'authenticated' (Admins) to do everything
-
-CREATE POLICY "Anyone can view members" ON members FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Admins can do everything on members" ON members FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Anyone can view work_dates" ON work_dates FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Admins can do everything on work_dates" ON work_dates FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Anyone can view assignments" ON assignments FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Anyone can insert assignments" ON assignments FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Anyone can delete assignments" ON assignments FOR DELETE TO anon, authenticated USING (true);
-CREATE POLICY "Admins can do everything on assignments" ON assignments FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Anyone can view settings" ON settings FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Admins can do everything on settings" ON settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Anyone can submit a registration" ON registrations FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Authenticated can read registrations" ON registrations FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated can delete registrations" ON registrations FOR DELETE TO authenticated USING (true);
-
 -- 8. Seed Data: 50 realistic German members
 INSERT INTO members (name, email, seniority_level, availability, historical_shifts, is_approved) VALUES
 ('Max Mustermann', 'max.mustermann@example.com', 'Senior', 'Any', 12, true),
@@ -158,7 +49,8 @@ INSERT INTO members (name, email, seniority_level, availability, historical_shif
 ('Werner Gross', 'werner.gross@example.com', 'Senior', 'Weekdays', 11, true),
 ('Christa Graf', 'christa.graf@example.com', 'Standard', 'Any', 5, true),
 ('Manfred Haas', 'manfred.haas@example.com', 'Junior', 'Weekdays', 0, true),
-('Hildegard Schreiber', 'hilde.schreiber@example.com', 'Senior', 'Weekends', 12, true);
+('Hildegard Schreiber', 'hilde.schreiber@example.com', 'Senior', 'Weekends', 12, true)
+ON CONFLICT (email) DO NOTHING;
 
 -- Add the default Admin
 INSERT INTO members (name, email, is_approved, is_admin)
@@ -199,4 +91,5 @@ WHERE
     -- Starting from 2026-05-05 (Tuesday) and 2026-05-06 (Wednesday)
     EXTRACT(DOW FROM d) IN (2, 3)
     AND ( (d::date - '2026-05-05'::date) % 21 < 2 )
-  );
+  )
+ON CONFLICT (date) DO NOTHING;

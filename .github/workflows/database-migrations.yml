@@ -22,18 +22,6 @@ jobs:
 
       - name: Start Supabase Local (Verification)
         run: |
-          # Initialize supabase if not already done
-          if [ ! -d "supabase" ]; then
-            supabase init
-          fi
-
-          # Move setup.sql to migrations if it exists to verify it
-          if [ -f "supabase/setup.sql" ]; then
-            mkdir -p supabase/migrations
-            cp supabase/setup.sql supabase/migrations/0001_initial_schema.sql
-          fi
-
-          # Start supabase (includes running migrations).
           # Observed flake: the database container sometimes cannot bind port 54322 because it is
           # still held on the runner. Clean up and retry once rather than failing the whole run.
           if ! supabase db start; then
@@ -42,6 +30,11 @@ jobs:
             docker ps -aq | xargs -r docker rm -f || true
             supabase db start
           fi
+
+      - name: Apply Migrations
+        # db start does not apply migrations. Without this the job lints an empty schema and a
+        # migration chain that cannot apply passes.
+        run: supabase db reset --local
 
       - name: Verify Migration Success
         run: |
