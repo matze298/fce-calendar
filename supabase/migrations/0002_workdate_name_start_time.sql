@@ -14,7 +14,7 @@ ALTER TABLE settings
   ADD COLUMN IF NOT EXISTS default_start_time_sat_sun TIME NOT NULL DEFAULT '15:30';
 
 -- Dates created before the column existed carry no time, so give them the same
--- bucket defaults the seed in setup.sql applies. Touching only NULL rows keeps a
+-- bucket defaults the seed in seed.sql applies. Touching only NULL rows keeps a
 -- second run a no-op and never overwrites a time an admin has already set.
 UPDATE work_dates
 SET start_time = CASE

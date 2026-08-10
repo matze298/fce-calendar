@@ -76,12 +76,19 @@ CREATE POLICY "Admins update settings" ON settings
   FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- Privileges are a separate layer from policies: a policy can only permit what a grant already
--- allows. Ambient default privileges give authenticated no SELECT on these tables, so the grant
--- is stated here rather than inherited, and the model behaves identically everywhere.
+-- allows, and some privileges, such as TRUNCATE, are not filterable by a policy at all. The
+-- ambient default privileges leave authenticated holding TRUNCATE, REFERENCES and TRIGGER on
+-- these tables, so the revoke has to run before the grant restates exactly the four verbs the
+-- app needs, or it would strip the grant made below rather than the ambient leftovers.
+REVOKE ALL ON TABLE members, work_dates, assignments, settings FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE
    ON TABLE members, work_dates, assignments, settings
    TO authenticated;
-REVOKE ALL ON TABLE members, work_dates, assignments, settings FROM anon;
+
+-- The reminder cron authenticates as service_role. BYPASSRLS exempts it from every policy above,
+-- but not from the privilege layer, so it still needs an explicit read grant, matching its
+-- read-only use of these tables.
+GRANT SELECT ON TABLE members, work_dates, assignments TO service_role;
 
 -- Creates a registration claim for every new auth account in the same transaction, so every
 -- account has exactly one. The address comes from the auth row, not from user input.
@@ -106,6 +113,8 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.handle_new_auth_user() FROM PUBLIC;
+
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -123,8 +132,8 @@ CREATE POLICY "Admins read registrations" ON registrations
 CREATE POLICY "Admins delete registrations" ON registrations
   FOR DELETE TO authenticated USING (public.is_admin());
 
+REVOKE ALL ON TABLE registrations FROM anon, authenticated;
 GRANT SELECT, DELETE ON TABLE registrations TO authenticated;
-REVOKE ALL ON TABLE registrations FROM anon;
 
 -- The member read model. RLS is row-level, and "my colleagues' names" is a column-level
 -- requirement: a row policy permitting a colleague's members row would serve select=* with the
@@ -154,5 +163,5 @@ SELECT wd.id         AS workdate_id,
           AND mine.status = 'Published'
    );
 
+REVOKE ALL ON TABLE public.my_shift_roster FROM anon, authenticated;
 GRANT SELECT ON TABLE public.my_shift_roster TO authenticated;
-REVOKE ALL ON TABLE public.my_shift_roster FROM anon;

@@ -32,7 +32,8 @@ address entered into it, not a go-live date.
   Supabase SQL editor, which runs as `postgres` and bypasses RLS
 - No backup or restore procedure for the Supabase project
 - No data retention policy. The "right to be forgotten" button required by blueprint section 4 does
-  exist (`app/admin/members/page.tsx:130`), but nothing defines how long data is kept otherwise
+  exist (`deleteMember` in `app/admin/members/page.tsx`), but nothing defines how long data is kept
+  otherwise
 - `app/api/generate/route.ts` deletes all Draft assignments then inserts the new ones with no
   transaction, so a failure between the two leaves an empty plan
 

@@ -20,6 +20,10 @@ The schema lives in `supabase/migrations/`, applied in ascending order.
 If you cannot link, paste each file in `supabase/migrations/` into the Supabase SQL Editor in
 ascending filename order. They are idempotent, so re-running one is safe.
 
+Either way, run `notify pgrst, 'reload schema';` afterwards. PostgREST caches the schema, and
+skipping this makes the API answer `PGRST205` for the new `my_shift_roster` view until it reloads
+on its own.
+
 **Locally:**
 
 ```bash
@@ -31,6 +35,10 @@ npm run db:stop
 
 `supabase/seed.sql` holds development data only. `supabase/dev_reset.sql` drops every table and is
 never for a database with real member records.
+
+Every write to `members` is admin-only once `0005_access_control.sql` applies, so an empty table
+has nobody who can set `is_admin` on themselves or anyone else through the app. Seed or repair the
+first administrator directly in the Supabase SQL Editor, which runs as `postgres` and bypasses RLS.
 
 ## 3. Local Development
 To start the project locally, follow these steps:

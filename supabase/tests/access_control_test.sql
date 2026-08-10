@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(35);
+SELECT plan(42);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -59,6 +59,11 @@ SELECT throws_ok(
   $$INSERT INTO members (name, email) VALUES ('Sneaky', 'pgtap.sneaky@example.com')$$,
   '42501', NULL, 'member cannot insert a member');
 
+-- THEN a member cannot truncate the table either, a privilege no policy can filter
+SELECT throws_ok(
+  $$TRUNCATE TABLE members$$,
+  '42501', NULL, 'member cannot truncate members');
+
 RESET ROLE;
 
 -- GIVEN an approved admin
@@ -79,6 +84,35 @@ WITH u AS (
 )
 SELECT is((SELECT count(*) FROM u), 1::bigint, 'admin can update another member');
 
+-- THEN an admin can create a member, the action behind linking a registration claim
+WITH i AS (
+  INSERT INTO members (name, email, is_admin, is_approved)
+  VALUES ('Neu Erstellt', 'pgtap.admininsert@example.com', false, true)
+  RETURNING 1
+)
+SELECT is((SELECT count(*) FROM i), 1::bigint, 'admin can insert a member');
+
+-- THEN an admin can delete a member, the action behind the erasure button
+WITH d AS (
+  DELETE FROM members WHERE email = 'pgtap.admininsert@example.com' RETURNING 1
+)
+SELECT is((SELECT count(*) FROM d), 1::bigint, 'admin can delete a member');
+
+-- THEN an admin can create a work_date
+WITH i AS (
+  INSERT INTO work_dates (date) VALUES ('2099-06-01') RETURNING 1
+)
+SELECT is((SELECT count(*) FROM i), 1::bigint, 'admin can insert a work_date');
+
+DELETE FROM work_dates WHERE date = '2099-06-01';
+
+-- THEN an admin can update the settings row
+WITH u AS (
+  UPDATE settings SET default_start_time_mon_thu = default_start_time_mon_thu
+   WHERE id = 1 RETURNING 1
+)
+SELECT is((SELECT count(*) FROM u), 1::bigint, 'admin can update settings');
+
 RESET ROLE;
 
 -- GIVEN an unauthenticated visitor
@@ -89,6 +123,16 @@ SELECT throws_ok('SELECT count(*) FROM members',     '42501', NULL, 'anon is ref
 SELECT throws_ok('SELECT count(*) FROM assignments', '42501', NULL, 'anon is refused on assignments');
 SELECT throws_ok('SELECT count(*) FROM work_dates',  '42501', NULL, 'anon is refused on work_dates');
 
+RESET ROLE;
+
+-- GIVEN the reminder cron authenticated as service_role
+SET LOCAL ROLE service_role;
+-- WHEN it runs the join it uses to find who to email
+-- THEN the query succeeds, because BYPASSRLS exempts service_role from every policy above but
+-- not from the underlying table privilege, which is granted separately
+SELECT lives_ok(
+  $$SELECT a.id, m.email FROM assignments a JOIN members m ON m.id = a.member_id$$,
+  'service_role can run the cron''s read join');
 RESET ROLE;
 
 -- GIVEN a new auth account carrying first and last name metadata
@@ -145,6 +189,13 @@ SELECT set_config('request.jwt.claims',
 SET LOCAL ROLE authenticated;
 -- THEN they can review claims
 SELECT ok((SELECT count(*) FROM registrations) > 0, 'admin reads registrations');
+
+-- THEN an admin can delete a claim, the action that discards a rejected signup
+WITH d AS (
+  DELETE FROM registrations WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000002' RETURNING 1
+)
+SELECT is((SELECT count(*) FROM d), 1::bigint, 'admin can delete a registration');
+
 RESET ROLE;
 
 -- GIVEN an unauthenticated visitor
