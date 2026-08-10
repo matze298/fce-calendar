@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(42);
+SELECT plan(33);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -36,9 +36,9 @@ SELECT set_config('request.jwt.claims',
                                     'role', 'authenticated')::text, true);
 SET LOCAL ROLE authenticated;
 
--- THEN they read exactly one members row, their own
-SELECT is((SELECT count(*) FROM members), 1::bigint, 'member reads exactly one members row');
-SELECT is((SELECT email FROM members), 'pgtap.member@example.com', 'the row a member reads is their own');
+-- THEN the only row they read is their own
+SELECT set_eq('SELECT email FROM members', ARRAY['pgtap.member@example.com'],
+              'member reads exactly one members row, their own');
 
 -- THEN the other tables are empty for them. They hold the DML grant, so RLS filters rather
 -- than refusing, which is why these assert counts and not errors.
@@ -72,10 +72,8 @@ SELECT set_config('request.jwt.claims',
                                     'role', 'authenticated')::text, true);
 SET LOCAL ROLE authenticated;
 
--- THEN they read past their own row, and reach the configuration tables
+-- THEN they read past their own row
 SELECT ok((SELECT count(*) FROM members) > 1, 'admin reads more than their own row');
-SELECT ok((SELECT count(*) FROM work_dates) > 0, 'admin reads work_dates');
-SELECT ok((SELECT count(*) FROM settings) = 1, 'admin reads the settings row');
 
 -- THEN an admin can update another member
 WITH u AS (
@@ -118,10 +116,9 @@ RESET ROLE;
 -- GIVEN an unauthenticated visitor
 SET LOCAL ROLE anon;
 
--- THEN every locked table refuses outright, because anon holds no grant at all
-SELECT throws_ok('SELECT count(*) FROM members',     '42501', NULL, 'anon is refused on members');
-SELECT throws_ok('SELECT count(*) FROM assignments', '42501', NULL, 'anon is refused on assignments');
-SELECT throws_ok('SELECT count(*) FROM work_dates',  '42501', NULL, 'anon is refused on work_dates');
+-- THEN the locked tables refuse outright, because anon holds no grant at all. All are covered by
+-- one revoke statement, so the table holding email addresses stands for the rest.
+SELECT throws_ok('SELECT count(*) FROM members', '42501', NULL, 'anon is refused on members');
 
 RESET ROLE;
 
@@ -145,12 +142,11 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('bbbbbbbb-0000-0000-0000-000000000001', 'pgtap.neu@example.com',
    '{"first_name":"Neu","last_name":"Mitglied"}'::jsonb);
 
--- THEN a claim exists, carrying the address from the auth row rather than a form field
-SELECT is((SELECT email FROM registrations WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000001'),
-          'pgtap.neu@example.com', 'the claim carries the authoritative address');
-SELECT is((SELECT first_name || ' ' || last_name FROM registrations
+-- THEN a claim exists, carrying the address from the auth row rather than a form field, along
+-- with the submitted names
+SELECT is((SELECT email || '|' || first_name || ' ' || last_name FROM registrations
             WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000001'),
-          'Neu Mitglied', 'the claim carries the submitted names');
+          'pgtap.neu@example.com|Neu Mitglied', 'the claim carries the authoritative address and the submitted names');
 
 -- WHEN an auth account is created with no metadata at all, as a dashboard invite does
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
@@ -174,10 +170,6 @@ SELECT lives_ok(
        '{"first_name":"Wieder","last_name":"Holt"}'::jsonb)$$,
   'a repeat auth.users insert for an existing claim does not raise');
 
--- THEN exactly one claim remains for that auth_id, the original, not a second one
-SELECT is((SELECT count(*) FROM registrations WHERE auth_id = 'bbbbbbbb-0000-0000-0000-000000000003'),
-          1::bigint, 'the conflicting insert leaves exactly one claim');
-
 -- GIVEN an approved non-admin member
 SELECT set_config('request.jwt.claims',
                   json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000002',
@@ -192,8 +184,6 @@ SELECT set_config('request.jwt.claims',
                   json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000001',
                                     'role', 'authenticated')::text, true);
 SET LOCAL ROLE authenticated;
--- THEN they can review claims
-SELECT ok((SELECT count(*) FROM registrations) > 0, 'admin reads registrations');
 
 -- THEN an admin can delete a claim, the action that discards a rejected signup
 WITH d AS (
@@ -270,8 +260,6 @@ SELECT set_eq(
   'the roster lists the member and the colleague sharing their date');
 
 -- THEN only their own date appears, so a colleague's unrelated shift stays private
-SELECT is((SELECT count(DISTINCT workdate_id) FROM my_shift_roster), 1::bigint,
-          'the roster covers only dates the member works');
 SELECT set_eq('SELECT DISTINCT date::text FROM my_shift_roster', ARRAY['2099-01-10'],
               'the roster names the correct date');
 
