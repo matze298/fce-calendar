@@ -20,7 +20,6 @@ function makeAppointments(count: number): AppointmentExport {
       date: '2026-09-20',
       name: 'Veranstaltung',
       startTime: '19:00',
-      requiredPeople: 2,
       assignedNames: ['Max Mustermann'],
     })),
     memberShifts: [],
@@ -33,35 +32,52 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 describe('renderAppointmentSections page break guard', () => {
-  it('keeps the second heading on the current page when the first table leaves enough room', () => {
-    // GIVEN a first table whose last row ends comfortably above the bottom margin
+  it('keeps the second heading on the current page when the first table leaves room', () => {
+    // GIVEN a short first table
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
     // WHEN rendering both sections
-    renderAppointmentSections(doc, autoTable, makeAppointments(31), TODAY, 14);
+    renderAppointmentSections(doc, autoTable, makeAppointments(5), TODAY, 14);
 
-    // THEN no page break was needed
+    // THEN nothing paginated and the heading is drawn once
     expect(doc.getNumberOfPages()).toBe(1);
     expect(countOccurrences(doc.output(), 'Dienste je Mitglied')).toBe(1);
   });
 
-  it('moves the second heading to a fresh page when the first table would push it past the bottom margin', () => {
-    // GIVEN one more row than above, which is enough to cross the guard's threshold but still well
-    // short of the row count where the first table would paginate on its own
+  it('adds a page for the second heading before the first table itself has to spill', () => {
+    // GIVEN we locate the guard's own window at runtime rather than hardcoding a row count, because
+    // that window shifts with any change to fonts, column widths or padding. Removing one column
+    // already moved it once.
+    //
+    // The discriminator is that autoTable repeats a table's header on every page it spans. So a second
+    // page while the appointments header still appears exactly once can only have been created by the
+    // guard, not by the first table running out of room. Without the guard no such row count exists,
+    // which is what makes this test fail if the guard is deleted.
+    let boundary = 0;
+    for (let rows = 1; rows <= 120; rows += 1) {
+      const probe = new jsPDF({ unit: 'mm', format: 'a4' });
+      renderAppointmentSections(probe, autoTable, makeAppointments(rows), TODAY, 14);
+      const output = probe.output();
+      if (probe.getNumberOfPages() === 2 && countOccurrences(output, 'Eingeteilte Personen') === 1) {
+        boundary = rows;
+        break;
+      }
+    }
+
+    // THEN such a row count exists. If it does not, the guard is gone and everything below is vacuous
+    expect(boundary).toBeGreaterThan(0);
+
+    // WHEN rendering at that row count
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-
-    // WHEN rendering both sections
-    renderAppointmentSections(doc, autoTable, makeAppointments(32), TODAY, 14);
-
-    // THEN the guard added a page rather than drawing the heading off the bottom margin
-    expect(doc.getNumberOfPages()).toBe(2);
-
-    // THEN the heading and its note are drawn exactly once, on the new page, not orphaned or duplicated
+    renderAppointmentSections(doc, autoTable, makeAppointments(boundary), TODAY, 14);
     const raw = doc.output();
+
+    // THEN the heading and its note are drawn exactly once, so the guard neither orphaned the heading
+    // on the full page nor drew it twice
     expect(countOccurrences(raw, 'Dienste je Mitglied')).toBe(1);
     expect(countOccurrences(raw, 'Keine Dienste im gewählten Zeitraum vergeben.')).toBe(1);
 
-    // THEN the footer correctly reports the total once the second page exists
+    // THEN the footer reports the real total, which is only knowable once the last page exists
     expect(raw).toContain('Seite 1 von 2');
     expect(raw).toContain('Seite 2 von 2');
   });

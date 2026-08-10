@@ -848,6 +848,10 @@ test.describe('Admin Dashboard', () => {
     const raw = fs.readFileSync(downloadPath, 'latin1');
     expect(raw).toContain('Heimspiel gegen SV Musterhausen');
     expect(raw).toContain('Vereinsfest');
+    // The fixture carries 19:00:00 and 15:00:00, so a trimmed time has to reach the page. Without
+    // this the Uhrzeit column could silently render a dash for every row and nothing would fail.
+    expect(raw).toContain('19:00');
+    expect(raw).toContain('15:00');
     expect(raw).toContain('Max Mustermann');
     expect(raw).not.toContain('Keine Termine im gewählten Zeitraum.');
     expect(raw).not.toContain('Keine Dienste im gewählten Zeitraum vergeben.');

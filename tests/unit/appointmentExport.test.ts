@@ -14,7 +14,6 @@ function workDate(id: string, date: string, overrides: Partial<ExportWorkDateInp
     date,
     name: null,
     start_time: '20:00:00',
-    required_people: 2,
     ...overrides,
   };
 }

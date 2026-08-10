@@ -84,12 +84,11 @@ export function renderAppointmentSections(
     autoTable(doc, {
       startY: cursorY,
       margin: { left: MARGIN_X, right: MARGIN_X },
-      head: [['Datum', 'Uhrzeit', 'Veranstaltung', 'Besetzung', 'Eingeteilte Personen']],
+      head: [['Datum', 'Uhrzeit', 'Veranstaltung', 'Eingeteilte Personen']],
       body: data.appointments.map(appointment => [
         formatLongDate(appointment.date),
         appointment.startTime ?? '-',
         appointment.name ?? '-',
-        `${appointment.assignedNames.length} / ${appointment.requiredPeople}`,
         appointment.assignedNames.join(', ') || '-',
       ]),
       styles: {
@@ -103,7 +102,6 @@ export function renderAppointmentSections(
       columnStyles: {
         0: { cellWidth: 28 },
         1: { cellWidth: 16 },
-        3: { cellWidth: 16, halign: 'center' },
       },
     });
     cursorY = readFinalY(doc) + 12;

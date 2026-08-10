@@ -5,7 +5,6 @@ export type ExportWorkDateInput = {
   date: string;
   name: string | null;
   start_time: string | null;
-  required_people: number;
 };
 
 export type ExportAssignmentInput = {
@@ -19,7 +18,6 @@ export type ExportAppointment = {
   date: string;
   name: string | null;
   startTime: string | null;
-  requiredPeople: number;
   assignedNames: string[];
 };
 
@@ -71,7 +69,6 @@ export function buildAppointmentExport({
     date: wd.date,
     name: wd.name,
     startTime: toTimeInputValue(wd.start_time) || null,
-    requiredPeople: wd.required_people,
     assignedNames: published
       .filter(a => a.workdate_id === wd.id)
       .map(a => a.members.name)
