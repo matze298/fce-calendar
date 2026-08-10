@@ -872,7 +872,7 @@ test.describe('Admin Dashboard', () => {
 
 // GIVEN the generate endpoint, which deletes every draft assignment when it runs
 test.describe('POST /api/generate authentication', () => {
-  test('refuses a request carrying no bearer token', async ({ request }) => {
+  test('answers 401 when no bearer token is supplied', async ({ request }) => {
     // WHEN it is called with no Authorization header
     const response = await request.post('/api/generate');
 

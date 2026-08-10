@@ -7,6 +7,8 @@ export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+  // Narrows authHeader from string | null to string for the client below, and skips the auth
+  // round trip entirely for a request that is obviously unauthenticated.
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) {
     return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
