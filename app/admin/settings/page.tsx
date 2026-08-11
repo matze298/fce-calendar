@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults } from '@/utils/startTime';
 import { checkAdminAccess } from '@/utils/adminGuard';
 import { errorMessage } from '@/utils/errors';
+import { SignOutButton } from '@/app/components/SignOutButton';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -96,9 +97,12 @@ export default function SettingsPage() {
             </Link>
             <h1 className="text-xl font-bold">Einstellungen</h1>
           </div>
-          <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
-            ← Zurück zum Dashboard
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
+              ← Zurück zum Dashboard
+            </Link>
+            <SignOutButton />
+          </div>
         </div>
       </header>
 

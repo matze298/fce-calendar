@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { defaultStartTimeFor, isWeekendDate, parseIsoDate, readStartTimeDefaults, START_TIME_FALLBACKS, StartTimeDefaults, toTimeInputValue } from '@/utils/startTime';
 import { checkAdminAccess } from '@/utils/adminGuard';
+import { SignOutButton } from '@/app/components/SignOutButton';
 
 type WorkDate = {
   id: string;
@@ -137,9 +138,12 @@ export default function ManageDatesPage() {
             </Link>
             <h1 className="text-xl font-bold">Termin-Management</h1>
           </div>
-          <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
-            ← Zurück zum Dashboard
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
+              ← Zurück zum Dashboard
+            </Link>
+            <SignOutButton />
+          </div>
         </div>
       </header>
 

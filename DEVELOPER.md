@@ -18,10 +18,14 @@ The schema lives in `supabase/migrations/`, applied in ascending order.
 3. `npx supabase db push`
 
 If you cannot link, paste each file in `supabase/migrations/` into the Supabase SQL Editor in
-ascending filename order. They are idempotent, so re-running one is safe.
+ascending filename order. Each file is idempotent on its own, but re-running an earlier one after a
+later one has already applied can undo what that later file did. For example,
+`0005_access_control.sql` creates the view `my_shift_roster`, and `0006_member_schedule.sql` later
+drops it. Re-pasting 0005 by itself after 0006 has run resurrects that dropped view. If you need to
+repair a single file, run the chain forward from it rather than stopping at that one file.
 
 Either way, run `notify pgrst, 'reload schema';` afterwards. PostgREST caches the schema, and
-skipping this makes the API answer `PGRST205` for the new `my_shift_roster` view until it reloads
+skipping this makes the API answer `PGRST205` for `public.published_schedule` until it reloads
 on its own.
 
 **Locally:**

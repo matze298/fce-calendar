@@ -27,7 +27,7 @@ export default function LoginPage() {
       setError('Anmeldung fehlgeschlagen: ' + error.message);
       setLoading(false);
     } else {
-      router.push('/admin');
+      router.push('/dienstplan');
     }
   };
 

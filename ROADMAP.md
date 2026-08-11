@@ -15,7 +15,7 @@ For what the app does and how it is built, read the blueprints and `docs/WEBAPP_
   cannot log in until real values are filled in. See `DEVELOPER.md` section 3
 - CI gates every PR on pytest with ruff and ty, Playwright E2E, a pgTAP suite run against a local
   Supabase instance, and frontend lint, type check, unit tests and build
-- The pgTAP suite (`supabase/tests/access_control_test.sql`, 35 assertions) exercises the real RLS
+- The pgTAP suite (`supabase/tests/access_control_test.sql`, 32 assertions) exercises the real RLS
   policies and grants against a real Postgres instance. The Playwright suite still mocks the entire
   Supabase layer, so no test exercises authentication or RLS through an actual browser session
 
@@ -42,8 +42,10 @@ address entered into it, not a go-live date.
 Blueprint section 4's RLS is in place. `public.is_admin()` is the predicate every admin policy uses, and
 administrators have full access to `members`, `work_dates` and `assignments`, and read plus update on
 `settings` and read plus delete on `registrations`. A non-admin member reads exactly their own `members`
-row and nothing else directly. `anon` holds no privilege on any table. See blueprint section 4 for the
-full picture and `supabase/tests/access_control_test.sql` for the pgTAP suite that verifies it in CI.
+row directly, and beyond that reads the published plan through the `public.published_schedule` view,
+which lists every published date and everyone assigned to it once an admin has approved the member.
+`anon` holds no privilege on any table. See blueprint section 4 for the full picture and
+`supabase/tests/access_control_test.sql` for the pgTAP suite that verifies it in CI.
 
 - An auth account can end up with nothing in `members` or `registrations` pointing at it, and nothing
   can clean it up without the service role key. Three ways in: an admin rejects a registration claim,
@@ -153,6 +155,18 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 
 ## After go-live
 
+- Neither `utils/memberSchedule.ts` nor `utils/appointmentExport.ts` has a test pinning that dates
+  parse through `parseIsoDate` rather than `new Date(isoString)`. Swapping that call back in still
+  passes both suites today. `parseIsoDate` builds local midnight while `new Date(isoString)` builds
+  UTC midnight, so the two agree at any offset of zero or greater and diverge only below it. That
+  covers CI at UTC and Germany at UTC+1/+2. Fix once across both modules by partially mocking
+  the module and asserting the call happened, mirroring the existing `localeCompare` spy already in
+  each file's tests
+- The member duty plan fetches the whole published horizon in one request with no upper bound
+  (`fetchScheduleRows` in `app/dienstplan/page.tsx`). The club produces roughly 150 rows per half
+  year, far under PostgREST's default max-rows setting, so this is years away from mattering. If
+  the row count ever approaches that cap, add a date range or a window rather than continuing to
+  ask for everything at once
 - Replace `alert()` user feedback with real toasts and inline errors
 - A custom 24 hour time control, if admins browse with a locale where the native `<input type="time">`
   renders AM and PM. See below

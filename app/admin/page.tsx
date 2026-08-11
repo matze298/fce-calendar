@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { toTimeInputValue, parseIsoDate } from '@/utils/startTime';
 import { checkAdminAccess } from '@/utils/adminGuard';
+import { SignOutButton } from '@/app/components/SignOutButton';
 import { errorMessage } from '@/utils/errors';
 import { buildAppointmentExport } from '@/utils/appointmentExport';
 import { downloadAppointmentPdf } from '@/utils/appointmentPdf';
@@ -251,6 +252,9 @@ export default function AdminDashboard() {
           >
             Zurück zur Startseite
           </button>
+          <div className="mt-4 flex justify-center">
+            <SignOutButton variant="card" />
+          </div>
         </div>
       </div>
     );
@@ -329,6 +333,7 @@ export default function AdminDashboard() {
                 )}
               </button>
             )}
+            <SignOutButton />
           </div>
         </div>
       </header>
