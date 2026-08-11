@@ -180,7 +180,11 @@ test.describe('Signing out', () => {
     await givenMemberSession(page, {
       profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
     });
-    await page.route('**/auth/v1/logout**', route => route.fulfill({ status: 204, body: '' }));
+    let logoutRequested = false;
+    await page.route('**/auth/v1/logout**', route => {
+      logoutRequested = true;
+      return route.fulfill({ status: 204, body: '' });
+    });
     await page.goto('/dienstplan');
 
     // WHEN they sign out
@@ -188,5 +192,30 @@ test.describe('Signing out', () => {
 
     // THEN they land back on the login page
     await expect(page).toHaveURL(/\/login$/);
+    // THEN the session was actually ended, not merely navigated away from
+    expect(logoutRequested).toBe(true);
+  });
+
+  test('reports a failure and stays put when the sign-out request itself fails', async ({ page }) => {
+    // GIVEN an approved member whose sign-out request will fail on the server
+    await givenMemberSession(page, {
+      profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
+    });
+    await page.route('**/auth/v1/logout**', route =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Internal Server Error' }),
+      }),
+    );
+    await page.goto('/dienstplan');
+
+    // WHEN they try to sign out
+    await page.getByRole('button', { name: /Abmelden/i }).click();
+
+    // THEN they are told sign-out failed, and stay on the duty plan rather than being sent to
+    // the login page while still holding a live session
+    await expect(page.getByText('Abmelden fehlgeschlagen: Internal Server Error')).toBeVisible();
+    await expect(page).toHaveURL(/\/dienstplan$/);
   });
 });
