@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { checkAdminAccess } from '@/utils/adminGuard';
 import { findMemberCandidates, type MatchSuggestion } from '@/utils/memberMatch';
+import { SignOutButton } from '@/app/components/SignOutButton';
 
 type Member = {
   id: string;
@@ -246,9 +247,12 @@ export default function ManageMembersPage() {
             </Link>
             <h1 className="text-xl font-bold">Mitglieder-Management</h1>
           </div>
-          <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
-            ← Zurück zum Dashboard
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
+              ← Zurück zum Dashboard
+            </Link>
+            <SignOutButton />
+          </div>
         </div>
       </header>
 

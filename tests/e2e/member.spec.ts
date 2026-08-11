@@ -173,3 +173,20 @@ test.describe('Member duty plan', () => {
     await expect(page.getByText(/noch kein Dienstplan veröffentlicht/i)).toHaveCount(0);
   });
 });
+
+test.describe('Signing out', () => {
+  test('ends the session and returns to the login page', async ({ page }) => {
+    // GIVEN an approved member looking at their plan
+    await givenMemberSession(page, {
+      profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
+    });
+    await page.route('**/auth/v1/logout**', route => route.fulfill({ status: 204, body: '' }));
+    await page.goto('/dienstplan');
+
+    // WHEN they sign out
+    await page.getByRole('button', { name: /Abmelden/i }).click();
+
+    // THEN they land back on the login page
+    await expect(page).toHaveURL(/\/login$/);
+  });
+});

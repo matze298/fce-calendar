@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import { SignOutButton } from '@/app/components/SignOutButton';
 import { checkMemberAccess } from '@/utils/memberGuard';
 import { errorMessage } from '@/utils/errors';
 import { parseIsoDate } from '@/utils/startTime';
@@ -115,6 +116,7 @@ export default function DutyPlanPage() {
                 Admin-Bereich
               </Link>
             )}
+            <SignOutButton />
           </div>
         </div>
       </header>
