@@ -27,10 +27,10 @@ export default function Home() {
 
         <div className="flex flex-col gap-4 w-full mt-12 sm:flex-row">
           <Link
-            href="/admin"
+            href="/dienstplan"
             className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary text-secondary font-bold transition-all hover:opacity-90 shadow-md sm:w-48"
           >
-            Schichten verwalten
+            Dienstplan ansehen
           </Link>
           <Link
             href="/login"
