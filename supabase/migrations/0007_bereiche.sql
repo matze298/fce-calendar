@@ -55,3 +55,49 @@ SELECT wd.id         AS workdate_id,
 
 REVOKE ALL ON TABLE public.published_schedule FROM anon, authenticated;
 GRANT SELECT ON TABLE public.published_schedule TO authenticated;
+
+-- Which Bereiche a member is available for. Every member defaults to Sportheim-Bewirtung, the
+-- only duty area the club has run so far, and an admin adds or removes rows from there.
+CREATE TABLE IF NOT EXISTS member_bereiche (
+  member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  bereich   bereich_type NOT NULL,
+  PRIMARY KEY (member_id, bereich)
+);
+
+ALTER TABLE member_bereiche ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Members read their own Bereiche" ON member_bereiche;
+DROP POLICY IF EXISTS "Admins manage member_bereiche" ON member_bereiche;
+
+CREATE POLICY "Members read their own Bereiche" ON member_bereiche
+  FOR SELECT TO authenticated
+  USING (member_id IN (SELECT id FROM members WHERE auth_id = auth.uid()));
+CREATE POLICY "Admins manage member_bereiche" ON member_bereiche
+  FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+-- Privileges are a separate layer from policies: ambient default privileges give authenticated no
+-- SELECT, so the grant is stated here rather than inherited.
+REVOKE ALL ON TABLE member_bereiche FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE member_bereiche TO authenticated;
+
+-- Every member is available for Sportheim-Bewirtung unless an admin says otherwise, and a join
+-- table has no column default to express that.
+CREATE OR REPLACE FUNCTION public.grant_default_bereich()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO public.member_bereiche (member_id, bereich)
+  VALUES (NEW.id, 'Sportheim-Bewirtung')
+  -- A failure inside an AFTER INSERT trigger fails the insert that fired it, so creating a member
+  -- must not break because the row is already there.
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_member_created ON members;
+CREATE TRIGGER on_member_created AFTER INSERT ON members
+  FOR EACH ROW EXECUTE FUNCTION public.grant_default_bereich();
+
+INSERT INTO member_bereiche (member_id, bereich)
+SELECT id, 'Sportheim-Bewirtung' FROM members
+ON CONFLICT DO NOTHING;

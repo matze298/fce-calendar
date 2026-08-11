@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(37);
+SELECT plan(43);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -341,6 +341,61 @@ SELECT is((SELECT count(*) FROM work_dates WHERE date < '2099-01-01' AND bereich
 -- THEN the member read model carries the Bereich, so a consumer can group by it
 SELECT has_column('public', 'published_schedule', 'bereich',
                   'the schedule exposes the Bereich');
+
+-- GIVEN a brand new member, created the way the admin UI creates one
+INSERT INTO members (id, name, email, is_approved) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000006', 'Neu Bereich', 'pgtap.neubereich@example.com', true);
+
+-- THEN they are available for exactly Sportheim-Bewirtung and nothing else
+SELECT set_eq(
+  $$SELECT bereich::text FROM member_bereiche
+     WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'$$,
+  ARRAY['Sportheim-Bewirtung'],
+  'a new member defaults to Sportheim-Bewirtung only');
+
+-- WHEN the default row somehow already exists and the trigger fires again
+INSERT INTO member_bereiche (member_id, bereich)
+  VALUES ('eeeeeeee-0000-0000-0000-000000000006', 'Fruehschoppen');
+-- THEN adding a second Bereich by hand is what an admin does, and it sticks
+SELECT is((SELECT count(*) FROM member_bereiche
+            WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'),
+          2::bigint,
+          'an admin can add a second Bereich to a member');
+
+-- THEN every member that existed before this migration was backfilled
+SELECT is(
+  (SELECT count(*) FROM members m
+    WHERE NOT EXISTS (SELECT 1 FROM member_bereiche mb
+                       WHERE mb.member_id = m.id
+                         AND mb.bereich = 'Sportheim-Bewirtung')),
+  0::bigint,
+  'every member is available for Sportheim-Bewirtung');
+
+-- GIVEN an approved non-admin member
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000002',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+-- THEN they read their own availability, which PR 2's checkboxes need
+SELECT ok((SELECT count(*) FROM member_bereiche) >= 1,
+          'a member reads their own Bereich availability');
+
+-- THEN they read nobody else's
+SELECT is(
+  (SELECT count(*) FROM member_bereiche
+    WHERE member_id <> (SELECT id FROM members WHERE auth_id = 'aaaaaaaa-0000-0000-0000-000000000002')),
+  0::bigint,
+  'a member reads no other member''s availability');
+
+RESET ROLE;
+
+-- GIVEN an unauthenticated visitor
+SET LOCAL ROLE anon;
+-- THEN the table refuses outright, because anon holds no grant
+SELECT throws_ok('SELECT count(*) FROM member_bereiche', '42501', NULL,
+                 'anon is refused on member_bereiche');
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;
