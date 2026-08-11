@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(43);
+SELECT plan(44);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -370,6 +370,25 @@ SELECT is(
                          AND mb.bereich = 'Sportheim-Bewirtung')),
   0::bigint,
   'every member is available for Sportheim-Bewirtung');
+
+-- GIVEN a member with no Bereich row at all, the state every one of the club's real members was
+-- in before this migration ran, since the trigger did not exist yet to give them one
+INSERT INTO members (id, name, email, is_approved) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000007', 'Vor Migration', 'pgtap.vormigration@example.com', true);
+DELETE FROM member_bereiche WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000007';
+
+-- WHEN the migration's backfill statement runs, re-inserting the default Bereich for every
+-- member, including the ones who already have it
+INSERT INTO member_bereiche (member_id, bereich)
+SELECT id, 'Sportheim-Bewirtung' FROM members
+ON CONFLICT DO NOTHING;
+
+-- THEN the member who had no row has it again, which is what gives the club's pre-existing
+-- members a Bereich on the real database
+SELECT is((SELECT count(*) FROM member_bereiche
+            WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000007'),
+          1::bigint,
+          'the backfill gives an existing member without a Bereich the default one');
 
 -- GIVEN an approved non-admin member
 SELECT set_config('request.jwt.claims',
