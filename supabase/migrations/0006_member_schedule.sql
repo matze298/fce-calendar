@@ -12,9 +12,10 @@ DROP VIEW IF EXISTS public.my_shift_roster;
 -- column level: a policy permitting a colleague's members row would serve select=* with the email
 -- in it. A view projects columns, so the email is absent rather than filtered.
 --
--- security_barrier keeps the planner from pushing a caller-supplied qual below the join and the
--- Published filter, which would otherwise turn a leaked query plan into an oracle for names and
--- dates on an unpublished draft.
+-- security_barrier keeps the planner from evaluating a caller-supplied qual before this view's own
+-- quals. Without it a qual pushed below the join and the Published filter can raise an error off a
+-- row the view would have hidden, which is a side channel for names and dates on an unpublished
+-- draft plan.
 CREATE OR REPLACE VIEW public.published_schedule
 WITH (security_barrier = true) AS
 SELECT wd.id         AS workdate_id,

@@ -160,8 +160,9 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 
 - Neither `utils/memberSchedule.ts` nor `utils/appointmentExport.ts` has a test pinning that dates
   parse through `parseIsoDate` rather than `new Date(isoString)`. Swapping that call back in still
-  passes both suites today, because the current test environment and CI both run in a positive UTC
-  offset, which also covers Germany's UTC+1/+2. Fix once across both modules by partially mocking
+  passes both suites today. `parseIsoDate` builds local midnight while `new Date(isoString)` builds
+  UTC midnight, so the two agree at any offset of zero or greater and diverge only below it. That
+  covers CI at UTC and Germany at UTC+1/+2. Fix once across both modules by partially mocking
   the module and asserting the call happened, mirroring the existing `localeCompare` spy already in
   each file's tests
 - Replace `alert()` user feedback with real toasts and inline errors
