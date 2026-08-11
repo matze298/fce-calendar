@@ -36,3 +36,8 @@ SELECT wd.id         AS workdate_id,
 
 REVOKE ALL ON TABLE public.published_schedule FROM anon, authenticated;
 GRANT SELECT ON TABLE public.published_schedule TO authenticated;
+
+-- Without this, PostgREST keeps answering PGRST205 for the dropped and created views above until
+-- it reloads its schema cache on its own. NOTIFY inside a transaction is delivered at commit, so
+-- this fires only once the view changes above are actually in effect.
+NOTIFY pgrst, 'reload schema';

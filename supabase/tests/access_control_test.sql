@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(32);
+SELECT plan(33);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -261,6 +261,29 @@ SET LOCAL ROLE authenticated;
 -- THEN it is empty, so a pending account learns nothing
 SELECT is((SELECT count(*) FROM published_schedule), 0::bigint,
           'an unapproved member sees an empty schedule despite holding a shift');
+RESET ROLE;
+
+-- GIVEN an approved member who holds no assignment of their own at all. Every other approved-member
+-- assertion above runs under someone who also has a Published assignment, so passing there could
+-- equally be explained by a narrower, own-dates-only predicate. This is the one caller who can only
+-- see anything if the gate is genuinely club wide.
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000006', 'pgtap.ohnedienst@example.com',
+   '{"first_name":"Ohne","last_name":"Dienst"}'::jsonb);
+
+INSERT INTO members (id, auth_id, name, email, is_admin, is_approved) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000006',
+   'Ohne Dienst', 'pgtap.ohnedienst@example.com', false, true);
+
+-- WHEN that member reads the published schedule
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000006',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+-- THEN they see the published plan anyway, since it does not depend on their own assignments
+SELECT ok((SELECT count(*) FROM published_schedule) > 0,
+          'a member with no assignments of their own still sees the published schedule');
 RESET ROLE;
 
 -- WHEN an authenticated caller with no members row at all reads the schedule. This is the state of

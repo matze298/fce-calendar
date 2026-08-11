@@ -50,11 +50,14 @@ async function givenMemberSession(
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: AUTH_USER }) }),
   );
 
+  // PostgREST answers select=* with an array regardless of row count, and maybeSingle() only
+  // unwraps that shape client side. Serving a bare object here would hide a client bug that a
+  // real backend cannot.
   await page.route(url => url.href.includes('/rest/v1/members'), route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(options.profile),
+      body: JSON.stringify(options.profile ? [options.profile] : []),
     }),
   );
 
@@ -218,7 +221,9 @@ test.describe('Member duty plan', () => {
     await expect(page.getByText(/Der Dienstplan konnte nicht geladen werden/i)).toBeVisible();
     await expect(page.getByText('Heimspiel')).toHaveCount(0);
     await expect(page.getByText(/Ihr nächster Dienst/)).toHaveCount(0);
-    await expect(page.getByText('Für Sie ist derzeit kein Dienst eingeteilt.')).toBeVisible();
+
+    // THEN neither does it claim there is no duty, which a failed load gives no grounds to say
+    await expect(page.getByText('Für Sie ist derzeit kein Dienst eingeteilt.')).toHaveCount(0);
   });
 
   test('re-fetches without the past-date filter once the toggle is checked, and shows the past date', async ({

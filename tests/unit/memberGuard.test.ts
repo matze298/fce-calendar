@@ -97,6 +97,44 @@ describe('checkMemberAccess', () => {
     });
   });
 
+  it('reports an error rather than unauthenticated when getUser itself fails', async () => {
+    // GIVEN a transient auth failure, which surfaces as a null user alongside an error rather
+    // than as a clean "nobody signed in"
+    mocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: { message: 'AuthRetryableFetchError: fetch failed' },
+    });
+
+    // WHEN checking access
+    const access = await checkMemberAccess();
+
+    // THEN the caller learns the check failed, and no members lookup is attempted on a user
+    // that was never actually resolved
+    expect(access).toEqual({
+      state: 'error',
+      message: 'AuthRetryableFetchError: fetch failed',
+    });
+    expect(mocks.maybeSingle).not.toHaveBeenCalled();
+  });
+
+  it('reports an error rather than pending when the members lookup fails', async () => {
+    // GIVEN a signed-in user whose members lookup fails, rather than simply finding no row
+    mocks.getUser.mockResolvedValue({ data: { user: { id: 'auth-1' } }, error: null });
+    mocks.maybeSingle.mockResolvedValue({
+      data: null,
+      error: { message: 'relation "members" does not exist' },
+    });
+
+    // WHEN checking access
+    const access = await checkMemberAccess();
+
+    // THEN the caller learns the real reason rather than being told to wait for approval
+    expect(access).toEqual({
+      state: 'error',
+      message: 'relation "members" does not exist',
+    });
+  });
+
   it('matches the members row on auth_id rather than another column', async () => {
     // GIVEN an approved member
     givenSignedInUser({ id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false });

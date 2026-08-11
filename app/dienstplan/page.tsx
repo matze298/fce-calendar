@@ -17,12 +17,14 @@ import {
 import { supabase } from '@/utils/supabase';
 
 export default function DutyPlanPage() {
-  const [state, setState] = useState<'loading' | 'pending' | 'ok'>('loading');
+  const [state, setState] = useState<'loading' | 'pending' | 'ok' | 'error'>('loading');
   const [isAdmin, setIsAdmin] = useState(false);
   const [days, setDays] = useState<ScheduleDay[]>([]);
   const [nextDuty, setNextDuty] = useState<ScheduleDay | null>(null);
   const [includePast, setIncludePast] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accessErrorMessage, setAccessErrorMessage] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -31,47 +33,59 @@ export default function DutyPlanPage() {
     let ignore = false;
 
     const loadPage = async () => {
-      const access = await checkMemberAccess();
-      if (ignore) return;
+      try {
+        const access = await checkMemberAccess();
+        if (ignore) return;
 
-      if (access.state === 'unauthenticated') {
-        router.push('/login');
-        return;
-      }
+        if (access.state === 'error') {
+          setAccessErrorMessage(access.message);
+          setState('error');
+          return;
+        }
 
-      if (access.state === 'pending') {
-        setState('pending');
-        return;
-      }
+        if (access.state === 'unauthenticated') {
+          router.push('/login');
+          return;
+        }
 
-      setIsAdmin(access.isAdmin);
+        if (access.state === 'pending') {
+          setState('pending');
+          return;
+        }
 
-      // One clock reading for both the query window and the grouping, so the filter and the list
-      // cannot straddle midnight and disagree.
-      const today = new Date();
-      const { data, error: queryError } = await fetchScheduleRows(includePast, today);
-      if (ignore) return;
+        setIsAdmin(access.isAdmin);
 
-      if (queryError) {
-        setError(queryError.message);
-        setDays([]);
-        setNextDuty(null);
+        // One clock reading for both the query window and the grouping, so the filter and the list
+        // cannot straddle midnight and disagree.
+        const today = new Date();
+        const { data, error: queryError } = await fetchScheduleRows(includePast, today);
+        if (ignore) return;
+
+        if (queryError) {
+          setError(queryError.message);
+          setDays([]);
+          setNextDuty(null);
+          setState('ok');
+          return;
+        }
+
+        setError(null);
+        const grouped = groupScheduleRows({
+          rows: (data ?? []) as ScheduleRow[],
+          viewerMemberId: access.member.id,
+          includePast,
+          today,
+        });
+        setDays(grouped);
+        // Derived here rather than during render, so it uses the same clock reading as the query window
+        // and the grouping above.
+        setNextDuty(findNextOwnDuty(grouped, today));
         setState('ok');
-        return;
+      } catch (err) {
+        if (ignore) return;
+        setAccessErrorMessage(err instanceof Error ? err.message : String(err));
+        setState('error');
       }
-
-      setError(null);
-      const grouped = groupScheduleRows({
-        rows: (data ?? []) as ScheduleRow[],
-        viewerMemberId: access.member.id,
-        includePast,
-        today,
-      });
-      setDays(grouped);
-      // Derived here rather than during render, so it uses the same clock reading as the query window
-      // and the grouping above.
-      setNextDuty(findNextOwnDuty(grouped, today));
-      setState('ok');
     };
 
     loadPage();
@@ -79,7 +93,7 @@ export default function DutyPlanPage() {
     return () => {
       ignore = true;
     };
-  }, [includePast, router]);
+  }, [includePast, router, retryToken]);
 
   if (state === 'loading') {
     return (
@@ -114,6 +128,29 @@ export default function DutyPlanPage() {
     );
   }
 
+  if (state === 'error') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md">
+          <h2 className="text-2xl font-bold text-secondary mb-4">Zugriff konnte nicht geprüft werden</h2>
+          <p className="text-muted mb-8">{accessErrorMessage}</p>
+          <button
+            onClick={() => {
+              setState('loading');
+              setRetryToken(token => token + 1);
+            }}
+            className="w-full bg-secondary text-white py-3 rounded-lg font-bold"
+          >
+            Erneut versuchen
+          </button>
+          <div className="mt-4 flex justify-center">
+            <SignOutButton variant="card" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-12">
       <header className="bg-secondary text-white py-6 px-4 shadow-md sticky top-0 z-10">
@@ -138,11 +175,15 @@ export default function DutyPlanPage() {
 
       <main className="max-w-5xl mx-auto px-4 mt-8 flex flex-col gap-6">
         <section className="bg-white p-6 rounded-2xl shadow-xl">
-          <p className="text-secondary font-bold">
-            {nextDuty
-              ? `Ihr nächster Dienst: ${formatLongDate(nextDuty.date)}`
-              : 'Für Sie ist derzeit kein Dienst eingeteilt.'}
-          </p>
+          {/* Suppressed while an error stands, because a failed load says nothing about whether
+              somebody has a duty, and claiming they have none would be a guess presented as fact. */}
+          {!error && (
+            <p className="text-secondary font-bold">
+              {nextDuty
+                ? `Ihr nächster Dienst: ${formatLongDate(nextDuty.date)}`
+                : 'Für Sie ist derzeit kein Dienst eingeteilt.'}
+            </p>
+          )}
           <label className="mt-4 flex items-center gap-2 text-sm text-muted">
             <input
               type="checkbox"
@@ -199,7 +240,11 @@ export default function DutyPlanPage() {
 
 /** The published plan, restricted to the current or future window unless past dates are wanted. */
 function fetchScheduleRows(includePast: boolean, today: Date) {
-  let query = supabase.from('published_schedule').select('*');
+  let query = supabase
+    .from('published_schedule')
+    .select('*')
+    .order('date', { ascending: true })
+    .order('member_name', { ascending: true });
   if (!includePast) {
     query = query.gte('date', toIsoDate(today));
   }

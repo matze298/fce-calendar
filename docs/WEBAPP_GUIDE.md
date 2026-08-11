@@ -41,7 +41,7 @@ exception is a view built for member-facing pages:
 - **`utils/supabase.js`**: Initialized Supabase client (the equivalent of a `db_session` or `SQLAlchemy` engine).
 - **`utils/startTime.ts`**: Weekday bucket defaults, `TIME` value trimming, and date-only string parsing.
 - **`utils/adminGuard.ts`**: `checkAdminAccess()`, the shared admin check for the `/admin` pages. A UI convenience only, not a security boundary.
-- **`utils/memberGuard.ts`**: `checkMemberAccess()`, resolving a signed-in visitor into an approved member (with an `isAdmin` flag), `unauthenticated`, or `pending` (registered but not yet approved or linked). A UI convenience only. `published_schedule` enforces the real boundary through RLS.
+- **`utils/memberGuard.ts`**: `checkMemberAccess()`, resolving a signed-in visitor into an approved member (with an `isAdmin` flag), `unauthenticated`, `pending` (registered but not yet approved or linked), or `error` (the auth or members lookup itself failed, distinct from either of the above). A UI convenience only. `published_schedule` enforces the real boundary through RLS.
 - **`utils/memberSchedule.ts`**: `groupScheduleRows()` and `findNextOwnDuty()`, pure functions grouping the flat `published_schedule` rows into per-date entries and locating the viewer's next own duty.
 - **`utils/signOut.ts`**: `signOutAndRedirect()`, ending the Supabase session and returning the visitor to `/login`. Used by `app/components/SignOutButton.tsx` on `/dienstplan` and every `/admin` page.
 - **`utils/errors.ts`**: `errorMessage()`, for the message of a caught value that may not be an `Error`.

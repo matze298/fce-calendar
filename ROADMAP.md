@@ -36,9 +36,6 @@ address entered into it, not a go-live date.
   otherwise
 - `app/api/generate/route.ts` deletes all Draft assignments then inserts the new ones with no
   transaction, so a failure between the two leaves an empty plan
-- Applying `0006_member_schedule.sql` to the hosted project needs `notify pgrst, 'reload schema';`
-  run afterward. Skipping it leaves PostgREST answering `PGRST205` for `published_schedule`, since it
-  has to learn the new view and forget the one that migration drops
 
 ### Access control
 
@@ -165,6 +162,11 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
   covers CI at UTC and Germany at UTC+1/+2. Fix once across both modules by partially mocking
   the module and asserting the call happened, mirroring the existing `localeCompare` spy already in
   each file's tests
+- The member duty plan fetches the whole published horizon in one request with no upper bound
+  (`fetchScheduleRows` in `app/dienstplan/page.tsx`). The club produces roughly 150 rows per half
+  year, far under PostgREST's default max-rows setting, so this is years away from mattering. If
+  the row count ever approaches that cap, add a date range or a window rather than continuing to
+  ask for everything at once
 - Replace `alert()` user feedback with real toasts and inline errors
 - A custom 24 hour time control, if admins browse with a locale where the native `<input type="time">`
   renders AM and PM. See below
