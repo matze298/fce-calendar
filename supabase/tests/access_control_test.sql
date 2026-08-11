@@ -216,7 +216,7 @@ INSERT INTO assignments (member_id, workdate_id, status)
 SELECT m.id, 'dddddddd-0000-0000-0000-000000000001', 'Published'
   FROM members m WHERE m.email = 'pgtap.member@example.com';
 
--- The unapproved member holds a published shift, so a zero roster result can only come from
+-- The unapproved member holds a published shift, so a zero schedule result can only come from
 -- the is_approved filter and not from an absence of assignments.
 INSERT INTO assignments (member_id, workdate_id, status)
 SELECT m.id, 'dddddddd-0000-0000-0000-000000000002', 'Published'

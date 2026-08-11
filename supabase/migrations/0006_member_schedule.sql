@@ -11,7 +11,12 @@ DROP VIEW IF EXISTS public.my_shift_roster;
 -- A view rather than wider row policies, because RLS is row level while "the names on a date" is
 -- column level: a policy permitting a colleague's members row would serve select=* with the email
 -- in it. A view projects columns, so the email is absent rather than filtered.
-CREATE OR REPLACE VIEW public.published_schedule AS
+--
+-- security_barrier keeps the planner from pushing a caller-supplied qual below the join and the
+-- Published filter, which would otherwise turn a leaked query plan into an oracle for names and
+-- dates on an unpublished draft.
+CREATE OR REPLACE VIEW public.published_schedule
+WITH (security_barrier = true) AS
 SELECT wd.id         AS workdate_id,
        wd.date       AS date,
        wd.name       AS event_name,

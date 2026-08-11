@@ -45,8 +45,10 @@ address entered into it, not a go-live date.
 Blueprint section 4's RLS is in place. `public.is_admin()` is the predicate every admin policy uses, and
 administrators have full access to `members`, `work_dates` and `assignments`, and read plus update on
 `settings` and read plus delete on `registrations`. A non-admin member reads exactly their own `members`
-row and nothing else directly. `anon` holds no privilege on any table. See blueprint section 4 for the
-full picture and `supabase/tests/access_control_test.sql` for the pgTAP suite that verifies it in CI.
+row directly, and beyond that reads the published plan through the `public.published_schedule` view,
+which lists every published date and everyone assigned to it once an admin has approved the member.
+`anon` holds no privilege on any table. See blueprint section 4 for the full picture and
+`supabase/tests/access_control_test.sql` for the pgTAP suite that verifies it in CI.
 
 - An auth account can end up with nothing in `members` or `registrations` pointing at it, and nothing
   can clean it up without the service role key. Three ways in: an admin rejects a registration claim,
@@ -156,6 +158,12 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 
 ## After go-live
 
+- Neither `utils/memberSchedule.ts` nor `utils/appointmentExport.ts` has a test pinning that dates
+  parse through `parseIsoDate` rather than `new Date(isoString)`. Swapping that call back in still
+  passes both suites today, because the current test environment and CI both run in a positive UTC
+  offset, which also covers Germany's UTC+1/+2. Fix once across both modules by partially mocking
+  the module and asserting the call happened, mirroring the existing `localeCompare` spy already in
+  each file's tests
 - Replace `alert()` user feedback with real toasts and inline errors
 - A custom 24 hour time control, if admins browse with a locale where the native `<input type="time">`
   renders AM and PM. See below

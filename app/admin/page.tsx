@@ -252,6 +252,9 @@ export default function AdminDashboard() {
           >
             Zurück zur Startseite
           </button>
+          <div className="mt-4 flex justify-center">
+            <SignOutButton variant="card" />
+          </div>
         </div>
       </div>
     );

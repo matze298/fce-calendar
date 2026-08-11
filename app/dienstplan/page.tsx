@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 
 import { SignOutButton } from '@/app/components/SignOutButton';
 import { checkMemberAccess } from '@/utils/memberGuard';
-import { errorMessage } from '@/utils/errors';
 import { parseIsoDate } from '@/utils/startTime';
 import {
   findNextOwnDuty,
@@ -27,8 +26,13 @@ export default function DutyPlanPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Two rapid toggles put two loads in flight. Without this, the later-resolving one wins
+    // even when it was the earlier-toggled one, so the checkbox and the list could disagree.
+    let ignore = false;
+
     const loadPage = async () => {
       const access = await checkMemberAccess();
+      if (ignore) return;
 
       if (access.state === 'unauthenticated') {
         router.push('/login');
@@ -46,8 +50,12 @@ export default function DutyPlanPage() {
       // cannot straddle midnight and disagree.
       const today = new Date();
       const { data, error: queryError } = await fetchScheduleRows(includePast, today);
+      if (ignore) return;
+
       if (queryError) {
-        setError(errorMessage(queryError));
+        setError(queryError.message);
+        setDays([]);
+        setNextDuty(null);
         setState('ok');
         return;
       }
@@ -67,6 +75,10 @@ export default function DutyPlanPage() {
     };
 
     loadPage();
+
+    return () => {
+      ignore = true;
+    };
   }, [includePast, router]);
 
   if (state === 'loading') {
@@ -94,6 +106,9 @@ export default function DutyPlanPage() {
           >
             Zurück zur Startseite
           </button>
+          <div className="mt-4 flex justify-center">
+            <SignOutButton variant="card" />
+          </div>
         </div>
       </div>
     );

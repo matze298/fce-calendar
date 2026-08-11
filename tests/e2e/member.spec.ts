@@ -153,24 +153,116 @@ test.describe('Member duty plan', () => {
   });
 
   test('shows a failed query as an error rather than a false empty plan', async ({ page }) => {
-    // GIVEN an approved member whose schedule query fails
+    // GIVEN an approved member whose schedule query fails with the body PostgREST sends when the
+    // view has not been reloaded into its schema cache, the most likely real failure on this page
     await givenMemberSession(page, {
       profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
     });
     await page.route(url => url.href.includes('/rest/v1/published_schedule'), route =>
       route.fulfill({
-        status: 500,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'boom', details: '', hint: '', code: '500' }),
+        body: JSON.stringify({
+          message: "Could not find the table 'public.published_schedule' in the schema cache",
+          details: '',
+          hint: '',
+          code: 'PGRST205',
+        }),
       }),
     );
 
     // WHEN they open the plan
     await page.goto('/dienstplan');
 
-    // THEN the real error is shown, and the unrelated empty-plan message is not
-    await expect(page.getByText(/Der Dienstplan konnte nicht geladen werden/i)).toBeVisible();
+    // THEN the real error message is shown in full, not a stringified error object, so an operator
+    // reading it can actually tell what went wrong
+    await expect(
+      page.getByText(
+        "Der Dienstplan konnte nicht geladen werden: Could not find the table 'public.published_schedule' in the schema cache",
+      ),
+    ).toBeVisible();
+    // THEN the unrelated empty-plan message is not shown
     await expect(page.getByText(/noch kein Dienstplan veröffentlicht/i)).toHaveCount(0);
+  });
+
+  test('clears the previous list and next-duty line when a refetch fails', async ({ page }) => {
+    // GIVEN an approved member whose first load succeeds and shows a date they work
+    await givenMemberSession(page, {
+      profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
+    });
+    let scheduleRequestCount = 0;
+    await page.route(url => url.href.includes('/rest/v1/published_schedule'), route => {
+      scheduleRequestCount += 1;
+      if (scheduleRequestCount === 1) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(SCHEDULE_ROWS),
+        });
+      }
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'boom', details: '', hint: '', code: '500' }),
+      });
+    });
+    await page.goto('/dienstplan');
+    await expect(page.getByText('Heimspiel')).toBeVisible();
+    await expect(page.getByText(/Ihr nächster Dienst/)).toBeVisible();
+
+    // WHEN toggling past dates triggers a second request that fails
+    await page.getByLabel('Vergangene Termine einschließen').check();
+
+    // THEN the error banner appears, and the stale list and next-duty line are gone rather than
+    // sitting underneath it
+    await expect(page.getByText(/Der Dienstplan konnte nicht geladen werden/i)).toBeVisible();
+    await expect(page.getByText('Heimspiel')).toHaveCount(0);
+    await expect(page.getByText(/Ihr nächster Dienst/)).toHaveCount(0);
+    await expect(page.getByText('Für Sie ist derzeit kein Dienst eingeteilt.')).toBeVisible();
+  });
+
+  test('re-fetches without the past-date filter once the toggle is checked, and shows the past date', async ({
+    page,
+  }) => {
+    // GIVEN an approved member whose plan holds one past and one future date
+    const PAST_AND_FUTURE_ROWS = [
+      {
+        workdate_id: 'wd-past', date: '2020-01-10', event_name: 'Vergangenes Spiel', start_time: '15:30:00',
+        member_id: 'm-1', member_name: 'Mem Ber',
+      },
+      {
+        workdate_id: 'wd-future', date: '2099-01-10', event_name: 'Kommendes Spiel', start_time: '15:30:00',
+        member_id: 'm-1', member_name: 'Mem Ber',
+      },
+    ];
+    await givenMemberSession(page, {
+      profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
+    });
+    const requestedUrls: string[] = [];
+    await page.route(url => url.href.includes('/rest/v1/published_schedule'), route => {
+      requestedUrls.push(route.request().url());
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(PAST_AND_FUTURE_ROWS),
+      });
+    });
+
+    // WHEN they open the plan
+    await page.goto('/dienstplan');
+
+    // THEN only the future date is shown, and the request that produced it carried the gte filter
+    await expect(page.getByText('Kommendes Spiel')).toBeVisible();
+    await expect(page.getByText('Vergangenes Spiel')).toHaveCount(0);
+    expect(requestedUrls.at(-1)).toContain('date=gte.');
+
+    // WHEN they include past dates
+    await page.getByLabel('Vergangene Termine einschließen').check();
+
+    // THEN a second request fired without the gte filter, and the past date is now listed
+    await expect(page.getByText('Vergangenes Spiel')).toBeVisible();
+    expect(requestedUrls.length).toBeGreaterThanOrEqual(2);
+    expect(requestedUrls.at(-1)).not.toContain('date=gte.');
   });
 });
 
