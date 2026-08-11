@@ -20,11 +20,19 @@ load_dotenv(".env.local")
 
 
 def _get_supabase_client() -> Client:
-    """Initializes and returns a Supabase client."""
+    """Returns a Supabase client authenticated with the service role key.
+
+    The cron runs on a schedule with no user, and reminders need member addresses that Row Level
+    Security puts out of reach of every other role. Missing configuration raises rather than
+    falling back, because an anon key would silently find nothing to send.
+    """
     url: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
-    key: str = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-    if not url or not key:
-        msg = "Supabase URL and Key must be set in environment variables"
+    key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url:
+        msg = "NEXT_PUBLIC_SUPABASE_URL must be set in environment variables"
+        raise ValueError(msg)
+    if not key:
+        msg = "SUPABASE_SERVICE_ROLE_KEY must be set in environment variables"
         raise ValueError(msg)
     return create_client(url, key)
 

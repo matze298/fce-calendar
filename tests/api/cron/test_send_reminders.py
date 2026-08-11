@@ -5,12 +5,29 @@ import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
+from api.cron import send_reminders
 from api.cron.send_reminders import handler
 from api.models import WorkDate
 
 
 class TestHandler:
     """Tests for the cron job handler."""
+
+    def test_client_requires_the_service_role_key(self) -> None:
+        """Tests that a missing service role key raises rather than falling back to the anon key."""
+        # GIVEN a URL but no service role key, which is how a misconfigured deployment looks
+        with (
+            patch.dict(
+                os.environ,
+                {"NEXT_PUBLIC_SUPABASE_URL": "https://example.com", "SUPABASE_SERVICE_ROLE_KEY": ""},
+                clear=True,
+            ),
+            # WHEN the client is built
+            # THEN it refuses rather than falling back to a key that can no longer read members
+            pytest.raises(ValueError, match="SUPABASE_SERVICE_ROLE_KEY"),
+        ):
+            send_reminders._get_supabase_client()
 
     def test_process_request(self) -> None:
         """Tests the process request function."""

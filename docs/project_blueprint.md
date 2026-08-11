@@ -28,7 +28,7 @@
 * *Export:* The admin dashboard produces a printable A4 PDF of the schedule, carrying the club logo, a table of appointments with the people assigned to each, and a table listing every member's duties. Published assignments only, upcoming dates by default, with an opt-in for past dates.
 
 ## 4. Security & GDPR (Germany/EU Standards)
-* Strict Row Level Security (RLS) in Supabase. **Target, not current.** Every table still grants `FOR ALL TO authenticated USING (true)`, and `anon` can read all member rows. See `ROADMAP.md` in the repository root, which tracks this as a blocker for holding real member data.
+* Row Level Security (RLS) in Supabase. Administrators are identified by `public.is_admin()`, a `SECURITY DEFINER` predicate every admin policy uses instead of a policy on `members` querying `members`, which would recurse. Administrators have full access to `members`, `work_dates` and `assignments`, and read plus update on `settings` and read plus delete on `registrations`. A non-admin member can read exactly their own `members` row and, through the `public.my_shift_roster` view, their own upcoming shifts and the names of colleagues on those shifts. `anon` holds no privilege on any table. A pgTAP suite (`supabase/tests/access_control_test.sql`) asserts all of this and runs in CI.
 * No personal data beyond name/contact/availability.
 * "Right to be forgotten" button in Admin UI. Implemented in `app/admin/members/page.tsx`.
 * Use `.env.local` for all credentials.
@@ -36,10 +36,10 @@
 * **Linking:** An administrator resolves each claim on `/admin/members`, either linking it to an existing member from a ranked list of suggestions or creating a new member.
 
 ## 5. Local Development
-* `supabase start` for local Docker DB. *Target, not current: there is no `supabase/config.toml`, so this does not run yet. Develop against the hosted project instead.*
+* `npm run db:start` brings up a local Docker Postgres, `db:reset` applies the migration chain and seed data against it, and `db:test` runs the pgTAP suite. There is no `supabase/config.toml`, so the full local stack (`supabase start`, with Auth and the REST gateway) does not come up. Develop against the hosted project for anything that needs a running API.
 * `npm run dev` for normal local frontend development. The script uses Webpack instead of Turbopack to avoid filesystem and HMR issues on mounted workspaces.
 * `npx vercel dev` only when testing Vercel's Python/serverless-function emulation.
-* Fake club member data (e.g., "Max Mustermann") is seeded by `supabase/setup.sql`, not a separate `seed.sql`. Note that the same file drops all tables first, so it is safe to run only against an empty database.
+* Fake club member data (e.g., "Max Mustermann") is seeded by `supabase/seed.sql`, which only inserts rows. The schema itself lives in `supabase/migrations/`, applied in order by `npm run db:reset`.
 
 ## 6. Automated Reminders (Vercel Cron Jobs)
 * **Strategy:** Use Vercel's native Cron feature to trigger a Python Serverless Function once daily at 08:00 AM CET.

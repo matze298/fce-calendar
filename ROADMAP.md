@@ -10,13 +10,14 @@ For what the app does and how it is built, read the blueprints and `docs/WEBAPP_
 ## Current state
 
 - A real Supabase project is connected, currently holding dummy data (the fictional German names seeded
-  by `supabase/setup.sql`)
+  by `supabase/seed.sql`)
 - `.env.local` ships with placeholder credentials (`mock.supabase.co`, `mock-key`), so a fresh checkout
   cannot log in until real values are filled in. See `DEVELOPER.md` section 3
-- CI gates every PR on pytest with ruff and ty, Playwright E2E, Supabase migration verification, and
-  frontend lint, type check, unit tests and build
-- The Playwright suite mocks the entire Supabase layer, so **no test exercises real authentication or
-  real Row Level Security**. Everything in the access control section below is invisible to CI
+- CI gates every PR on pytest with ruff and ty, Playwright E2E, a pgTAP suite run against a local
+  Supabase instance, and frontend lint, type check, unit tests and build
+- The pgTAP suite (`supabase/tests/access_control_test.sql`, 35 assertions) exercises the real RLS
+  policies and grants against a real Postgres instance. The Playwright suite still mocks the entire
+  Supabase layer, so no test exercises authentication or RLS through an actual browser session
 
 ## Before the first real member record
 
@@ -25,51 +26,41 @@ address entered into it, not a go-live date.
 
 ### Data and operations
 
-- **`supabase/setup.sql` destroys data.** It opens with `DROP TABLE IF EXISTS ... CASCADE` on all four
-  tables, then seeds 51 members and 98 work dates. `DEVELOPER.md` section 2 instructs pasting it into the
-  SQL Editor, which is safe exactly once. Go-live needs a schema-only path with no drops and no seed
+- **The first administrator has no path through the app.** Every write to `members` is admin-only once
+  `0005_access_control.sql` applies (see the Access control section below), so an empty table has nobody
+  who can set `is_admin` on themselves or anyone else through the UI. Seed that first row through the
+  Supabase SQL editor, which runs as `postgres` and bypasses RLS
 - No backup or restore procedure for the Supabase project
 - No data retention policy. The "right to be forgotten" button required by blueprint section 4 does
-  exist (`app/admin/members/page.tsx:130`), but nothing defines how long data is kept otherwise
+  exist (`deleteMember` in `app/admin/members/page.tsx`), but nothing defines how long data is kept
+  otherwise
 - `app/api/generate/route.ts` deletes all Draft assignments then inserts the new ones with no
   transaction, so a failure between the two leaves an empty plan
 
 ### Access control
 
-Blueprint section 4 requires strict RLS. None of it is in place.
+Blueprint section 4's RLS is in place. `public.is_admin()` is the predicate every admin policy uses, and
+administrators have full access to `members`, `work_dates` and `assignments`, and read plus update on
+`settings` and read plus delete on `registrations`. A non-admin member reads exactly their own `members`
+row and nothing else directly. `anon` holds no privilege on any table. See blueprint section 4 for the
+full picture and `supabase/tests/access_control_test.sql` for the pgTAP suite that verifies it in CI.
 
-- **Every table grants full write access to any authenticated user.** All four carry
-  `FOR ALL TO authenticated USING (true) WITH CHECK (true)`, despite the policy names claiming
-  "Admins can do everything". Because `members` is included, any registered user can set `is_admin` on
-  their own row
-- **`anon` can read every member,** names and email addresses included, and the anon key is public by
-  design once the app is deployed. This is the GDPR exposure
-- **`anon` can insert and delete assignments,** so anyone can wipe or forge the published schedule
-- **Server side functions authenticate with the anon key,** not a service role key
-  (`api/cron/send_reminders.py`, `app/api/generate/route.ts`). They are indistinguishable from a browser
-  visitor, which is what forces the permissive policies above. Adding `SUPABASE_SERVICE_ROLE_KEY` and
-  using it server side is a prerequisite for tightening anything else
-- `utils/adminGuard.ts` is a UI convenience check only, as its own docstring states. Every admin page
-  redirect can be bypassed by calling Supabase directly
-- The new `registrations` table grants `INSERT` to `anon` and everything else to `authenticated`, which
-  still means any logged-in user can read and delete claims. Narrow it to admins with the rest of the
-  RLS rework
-- An auth account can outlive its claim, and nothing can clean it up without the service role key.
-  Two ways in: an admin rejects a claim, or the claim write fails after `signUp` already succeeded. The
-  person then holds a login that no admin can see. Retrying registration with the same address is the
-  only recovery, and it depends on Supabase returning the same user id rather than an obfuscated one
-
-Sequencing note: a policy on `members` that queries `members` recurses. The usual fixes are a
-`SECURITY DEFINER` helper or moving `is_admin` into the JWT app metadata. That choice is still open.
-
-Verification note: nothing tests the policies, and nothing can with the current setup, because the
-Playwright suite mocks Supabase entirely. This work needs its own harness, for example a psql script
-asserting each role's reach against a throwaway Postgres. Treat that as part of the task, not a
-follow-up, or the policies ship unverified.
+- An auth account can end up with nothing in `members` or `registrations` pointing at it, and nothing
+  can clean it up without the service role key. Three ways in: an admin rejects a registration claim,
+  the claim write fails after `signUp` already succeeded, or an admin deletes an already-linked member
+  (`deleteMember` in `app/admin/members/page.tsx` removes only the `members` row, never the
+  `auth.users` account). The person then holds a login that no admin can see. For the first two,
+  retrying registration with the same address is a recovery, since Supabase returns the same user id
+  for a repeat `signUp` rather than an obfuscated one. The third has no such recovery: the account is
+  already confirmed, and its registration claim was already consumed when the member was linked
 
 ### Configuration and secrets
 
 - Real Supabase URL and anon key in Vercel and in each developer's `.env.local`
+- `SUPABASE_SERVICE_ROLE_KEY` set in Vercel, server side only. It must never appear in a `NEXT_PUBLIC_`
+  variable, which both Vercel and Next.js expose to the browser bundle. The reminder cron already
+  refuses to run without it; nothing else needs it, since `/api/generate` and the browser both run as
+  the calling user under RLS
 - `CRON_SECRET` actually set in Vercel. The endpoint now refuses to run when it is unset, so a missing
   secret fails closed rather than accepting `Bearer None`
 - Resend domain verification for the `info@fcegenhausen.de` sender, without which every reminder is
@@ -83,12 +74,10 @@ follow-up, or the policies ship unverified.
   at a handful of confirmation emails per hour, so registration fails with `email rate limit exceeded`
   the moment more than a few people sign up on the same day
 - **Re-enable "Confirm email" in Supabase Auth.** It is currently switched off so that development is
-  not throttled by that rate limit. Two reasons it has to come back before real data:
-  registration otherwise accepts an address nobody has proved they own, and, more sharply, `signUp`
-  returns a session immediately, so anyone who registers instantly holds the `authenticated` role.
-  Under today's policies that role can write every row in every table, so confirmation-off and
-  permissive RLS is a bad pairing. Sequence it with the RLS rework rather than after it. This also
-  depends on custom SMTP above, since re-enabling it against the built-in sender reintroduces the
+  not throttled by that rate limit, so registration accepts an address nobody has proved they own.
+  `signUp` still returns a session immediately, but a freshly registered account has no linked
+  `members` row yet, so under current RLS it can read or write nothing until an admin links it. This
+  also depends on custom SMTP above, since re-enabling it against the built-in sender reintroduces the
   rate limit
 - Supabase Auth redirect URLs for the production hostname. See `DEVELOPER.md` section 4
 - GitHub's native secret scanning with push protection, a repository setting that blocks a push
@@ -100,8 +89,6 @@ follow-up, or the policies ship unverified.
 - Web Push notifications, named in blueprint section 1. Email through Resend is the only channel that
   exists, and it is the only free one. SMS or WhatsApp would be the paid fallback if email proves
   insufficient. Telegram was dropped from the codebase in favor of that decision
-- A working `supabase start` for local development, named in blueprint section 5. There is no
-  `supabase/config.toml`
 
 ## Live deployment
 
@@ -140,8 +127,8 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
    localhost
 8. Verify the reminder cron by calling the endpoint with the configured `CRON_SECRET`. It reports its
    mode, so confirm it says `live` rather than `dry-run` once `REMINDERS_LIVE` is set
-9. Switch "Confirm email" back on in Supabase Auth, after custom SMTP is in place. See the access
-   control section for why leaving it off is worse than an unverified address
+9. Switch "Confirm email" back on in Supabase Auth, after custom SMTP is in place. See the
+   Configuration and secrets section for why leaving it off is worse than an unverified address
 10. Link to the subdomain from the existing site's navigation
 
 ### Constraints to check before relying on it

@@ -8,11 +8,37 @@ This document contains technical details for setting up and operating the shift 
 - **Database & Auth:** Supabase (PostgreSQL)
 
 ## 2. Database Setup
-The database is configured manually via the Supabase Dashboard.
 
-1. Open the **SQL Editor** in your [Supabase Dashboard](https://supabase.com/dashboard).
-2. Execute the full setup script: [supabase/setup.sql](./supabase/setup.sql).
-3. This creates all tables, RLS (Row Level Security) policies, and seed data.
+The schema lives in `supabase/migrations/`, applied in ascending order.
+
+**Against a hosted project:**
+
+1. `npx supabase login`
+2. `npx supabase link --project-ref <your-project-ref>`
+3. `npx supabase db push`
+
+If you cannot link, paste each file in `supabase/migrations/` into the Supabase SQL Editor in
+ascending filename order. They are idempotent, so re-running one is safe.
+
+Either way, run `notify pgrst, 'reload schema';` afterwards. PostgREST caches the schema, and
+skipping this makes the API answer `PGRST205` for the new `my_shift_roster` view until it reloads
+on its own.
+
+**Locally:**
+
+```bash
+npm run db:start   # boots Postgres on 127.0.0.1:54322
+npm run db:reset   # applies every migration, then supabase/seed.sql
+npm run db:test    # runs the pgTAP access control suite
+npm run db:stop
+```
+
+`supabase/seed.sql` holds development data only. `supabase/dev_reset.sql` drops every table and is
+never for a database with real member records.
+
+Every write to `members` is admin-only once `0005_access_control.sql` applies, so an empty table
+has nobody who can set `is_admin` on themselves or anyone else through the app. Seed or repair the
+first administrator directly in the Supabase SQL Editor, which runs as `postgres` and bypasses RLS.
 
 ## 3. Local Development
 To start the project locally, follow these steps:
@@ -75,6 +101,7 @@ The system sends automated email reminders for shifts happening in exactly 7 day
 ### Environment Setup
 Add the following to your `.env.local`:
 - `CRON_SECRET`: A random string (e.g., `super-secret-123`). In production, Vercel provides this automatically.
+- `SUPABASE_SERVICE_ROLE_KEY`: The service role key from *Settings -> API*. The cron runs on a schedule with no user session, so it reads `members.email` with this key instead of the anon key. **Warning:** this key bypasses Row Level Security entirely. It belongs only in server-side configuration and must never appear in a `NEXT_PUBLIC_` variable or reach the browser.
 - `RESEND_API_KEY`: Your API key from [Resend](https://resend.com).
 - `DEVELOPMENT_EMAIL_OVERRIDE` (Optional): Set this to your own email address to redirect **all** reminder emails to yourself during testing, regardless of the member's email in the database.
 - `REMINDERS_LIVE` (Production only): Set to `true` to allow reminders to reach the addresses stored in the `members` table.
@@ -89,7 +116,7 @@ The endpoint reports which mode it ran in, so a cron run can be audited from its
 | `REMINDERS_LIVE=true` | `live` | The members' own addresses |
 | Neither | `dry-run` | Nobody. The run reports what it suppressed |
 
-The default sends nothing on purpose. Reaching real addresses has to be asked for, because any database seeded from `supabase/setup.sql` is full of plausible member records, and a default that mailed whatever the table contained would send club reminders to strangers from a developer's machine.
+The default sends nothing on purpose. Reaching real addresses has to be asked for, because any database seeded from `supabase/seed.sql` is full of plausible member records, and a default that mailed whatever the table contained would send club reminders to strangers from a developer's machine.
 
 ### Local Testing
 To trigger the reminder script manually without waiting for the schedule:

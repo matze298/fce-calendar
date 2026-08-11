@@ -34,51 +34,16 @@ export default function RegisterPage() {
       return;
     }
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { first_name: firstName.trim(), last_name: lastName.trim() },
+      },
     });
 
     if (signUpError) {
       setError('Registrierung fehlgeschlagen: ' + signUpError.message);
-      setLoading(false);
-      return;
-    }
-
-    const authId = signUpData.user?.id;
-
-    /**
-     * Both dead ends leave an auth account with no claim for an admin to find. The cause is named
-     * so the person can report something actionable rather than "it did not work".
-     */
-    const claimWriteFailed = (cause: string) =>
-      `Konto erstellt, aber die Registrierung konnte nicht gespeichert werden (${cause}). Bitte wenden Sie sich an den Vorstand.`;
-
-    if (authId) {
-      const { error: claimError } = await supabase.from('registrations').insert({
-        auth_id: authId,
-        email,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-      });
-
-      // The same address returns the same auth user without creating a second one, so a repeat
-      // attempt collides on auth_id. That is a duplicate registration, not a failure.
-      if (claimError && claimError.code === '23505') {
-        setError('Diese Registrierung liegt bereits vor und wird von einem Administrator geprüft.');
-        setLoading(false);
-        return;
-      }
-
-      if (claimError) {
-        console.error('Registration claim insert failed:', claimError);
-        setError(claimWriteFailed(claimError.code ? `${claimError.code}: ${claimError.message}` : claimError.message));
-        setLoading(false);
-        return;
-      }
-    } else {
-      console.error('signUp returned no user id, so no registration claim was written');
-      setError(claimWriteFailed('keine Benutzer-ID'));
       setLoading(false);
       return;
     }
@@ -141,7 +106,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border-2 border-gray-100 focus:border-primary focus:outline-none text-secondary"
-                  placeholder="beispiel@fce.de"
+                  placeholder="beispiel@example.com"
                   required
                 />
               </div>

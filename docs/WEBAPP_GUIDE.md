@@ -23,8 +23,16 @@ Next.js and Vercel Serverless Functions handle backend logic. For Python devs, t
 
 | Endpoint | Implementation File | Responsibility |
 | :--- | :--- | :--- |
-| `/api/generate`| `app/api/generate/route.ts` | Builds the draft plan. Reads members, work dates, published assignments and the cooldown setting, then delegates to `utils/schedule.ts` and writes the drafts back. |
-| `/api/cron/send_reminders` | `api/cron/send_reminders.py` | **Cron Job**: Automated daily email reminders for members with upcoming shifts. |
+| `/api/generate`| `app/api/generate/route.ts` | Builds the draft plan. Requires an `Authorization: Bearer <token>` header carrying the caller's own Supabase session (401 without one, 403 if the caller is not an approved admin). Reads members, work dates, published assignments and the cooldown setting as that caller, then delegates to `utils/schedule.ts` and writes the drafts back. |
+| `/api/cron/send_reminders` | `api/cron/send_reminders.py` | **Cron Job**: Automated daily email reminders for members with upcoming shifts. Runs with `SUPABASE_SERVICE_ROLE_KEY` and refuses to start without it. |
+
+### 🗄️ Database Read Model (`supabase/migrations/`)
+Row Level Security restricts every table to admins except a member's own `members` row. The one
+exception is a view built for member-facing pages:
+
+| Object | Columns | Responsibility |
+| :--- | :--- | :--- |
+| `public.my_shift_roster` | `workdate_id`, `date`, `event_name`, `start_time`, `member_id`, `member_name` | A signed-in member's own Published shifts, plus the names of colleagues assigned to those same shifts. No email address. No member-facing page reads it yet; it exists as the read model for one. |
 
 ### 🌍 Shared Logic & Global Files
 - **`app/layout.tsx`**: The "base template" (like a base Jinja2 template). Contains the HTML structure, fonts, and metadata that persist across all pages.
