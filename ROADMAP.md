@@ -15,7 +15,7 @@ For what the app does and how it is built, read the blueprints and `docs/WEBAPP_
   cannot log in until real values are filled in. See `DEVELOPER.md` section 3
 - CI gates every PR on pytest with ruff and ty, Playwright E2E, a pgTAP suite run against a local
   Supabase instance, and frontend lint, type check, unit tests and build
-- The pgTAP suite (`supabase/tests/access_control_test.sql`, 35 assertions) exercises the real RLS
+- The pgTAP suite (`supabase/tests/access_control_test.sql`, 32 assertions) exercises the real RLS
   policies and grants against a real Postgres instance. The Playwright suite still mocks the entire
   Supabase layer, so no test exercises authentication or RLS through an actual browser session
 
@@ -36,6 +36,9 @@ address entered into it, not a go-live date.
   otherwise
 - `app/api/generate/route.ts` deletes all Draft assignments then inserts the new ones with no
   transaction, so a failure between the two leaves an empty plan
+- Applying `0006_member_schedule.sql` to the hosted project needs `notify pgrst, 'reload schema';`
+  run afterward. Skipping it leaves PostgREST answering `PGRST205` for `published_schedule`, since it
+  has to learn the new view and forget the one that migration drops
 
 ### Access control
 

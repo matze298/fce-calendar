@@ -21,7 +21,7 @@ If you cannot link, paste each file in `supabase/migrations/` into the Supabase 
 ascending filename order. They are idempotent, so re-running one is safe.
 
 Either way, run `notify pgrst, 'reload schema';` afterwards. PostgREST caches the schema, and
-skipping this makes the API answer `PGRST205` for the new `my_shift_roster` view until it reloads
+skipping this makes the API answer `PGRST205` for `public.published_schedule` until it reloads
 on its own.
 
 **Locally:**

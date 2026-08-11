@@ -13,6 +13,7 @@ Each `page.tsx` file defines the UI for its directory's path.
 | `/` | `app/page.tsx` | Landing page & main entry point. |
 | `/login` | `app/login/page.tsx` | User authentication via Supabase. |
 | `/register` | `app/register/page.tsx` | Member registration & account creation. |
+| `/dienstplan` | `app/dienstplan/page.tsx` | Member-facing duty plan: every published date with the people on it, the viewer's own entries marked, their next duty named, and an opt-in for past dates. Shows an admin link only to an admin. |
 | `/admin` | `app/admin/page.tsx` | Main dashboard: Viewing assignments & triggering scheduling. |
 | `/admin/dates` | `app/admin/dates/page.tsx` | CRUD for work dates/shifts. |
 | `/admin/settings` | `app/admin/settings/page.tsx` | Scheduler configuration: default start times & cooldown period. |
@@ -32,7 +33,7 @@ exception is a view built for member-facing pages:
 
 | Object | Columns | Responsibility |
 | :--- | :--- | :--- |
-| `public.my_shift_roster` | `workdate_id`, `date`, `event_name`, `start_time`, `member_id`, `member_name` | A signed-in member's own Published shifts, plus the names of colleagues assigned to those same shifts. No email address. No member-facing page reads it yet; it exists as the read model for one. |
+| `public.published_schedule` | `workdate_id`, `date`, `event_name`, `start_time`, `member_id`, `member_name` | The whole published plan: one flat row per date/person pair, readable by any approved member. No email address. Feeds `/dienstplan`. |
 
 ### 🌍 Shared Logic & Global Files
 - **`app/layout.tsx`**: The "base template" (like a base Jinja2 template). Contains the HTML structure, fonts, and metadata that persist across all pages.
@@ -40,6 +41,9 @@ exception is a view built for member-facing pages:
 - **`utils/supabase.js`**: Initialized Supabase client (the equivalent of a `db_session` or `SQLAlchemy` engine).
 - **`utils/startTime.ts`**: Weekday bucket defaults, `TIME` value trimming, and date-only string parsing.
 - **`utils/adminGuard.ts`**: `checkAdminAccess()`, the shared admin check for the `/admin` pages. A UI convenience only, not a security boundary.
+- **`utils/memberGuard.ts`**: `checkMemberAccess()`, resolving a signed-in visitor into an approved member (with an `isAdmin` flag), `unauthenticated`, or `pending` (registered but not yet approved or linked). A UI convenience only. `published_schedule` enforces the real boundary through RLS.
+- **`utils/memberSchedule.ts`**: `groupScheduleRows()` and `findNextOwnDuty()`, pure functions grouping the flat `published_schedule` rows into per-date entries and locating the viewer's next own duty.
+- **`utils/signOut.ts`**: `signOutAndRedirect()`, ending the Supabase session and returning the visitor to `/login`. Used by `app/components/SignOutButton.tsx` on `/dienstplan` and every `/admin` page.
 - **`utils/errors.ts`**: `errorMessage()`, for the message of a caught value that may not be an `Error`.
 - **`utils/memberMatch.ts`**: Ranks existing members against a registration claim, normalizing German spelling variants so "Mueller" matches "Müller". Used only by the admin UI.
 - **`utils/appointmentExport.ts`**: Turns work dates and published assignments into the two tables the PDF export prints. Pure, and where the export's rules live.
