@@ -23,14 +23,16 @@ async function givenMemberSession(
   options: { profile: Record<string, unknown> | null; rows?: typeof SCHEDULE_ROWS },
 ): Promise<void> {
   // checkMemberAccess reads the session from local storage before it ever calls the network, so
-  // the auth/v1 mock below is reached only once a session already appears signed in.
-  await page.addInitScript(() => {
+  // the auth/v1 mock below is reached only once a session already appears signed in. The user is
+  // passed in as an argument, since an init script runs in the page and cannot close over
+  // AUTH_USER from module scope.
+  await page.addInitScript(user => {
     const mockSession = {
       access_token: 'fake-token',
       token_type: 'bearer',
       expires_in: 3600,
       refresh_token: 'fake-refresh',
-      user: { id: 'auth-1', email: 'mem.ber@example.com' },
+      user,
       expires_at: Math.floor(Date.now() / 1000) + 3600,
     };
 
@@ -42,7 +44,7 @@ async function givenMemberSession(
       }
       return originalGetItem.apply(this, args);
     };
-  });
+  }, AUTH_USER);
 
   await page.route('**/auth/v1/**', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: AUTH_USER }) }),
@@ -79,7 +81,8 @@ test.describe('Member duty plan', () => {
     await expect(page.getByText('Heimspiel')).toBeVisible();
     await expect(page.getByText('Auswaertsspiel')).toBeVisible();
     await expect(page.getByText('Kol Lege').first()).toBeVisible();
-    await expect(page.getByText('15:30')).toBeVisible();
+    // Exact match, so an untrimmed "15:30:00" would not satisfy it
+    await expect(page.getByText('15:30 · Heimspiel', { exact: true })).toBeVisible();
   });
 
   test('marks the viewer among the names so they can find themselves', async ({ page }) => {
@@ -105,7 +108,9 @@ test.describe('Member duty plan', () => {
     // WHEN they open the plan
     await page.goto('/dienstplan');
 
-    // THEN nothing invites them into the admin area
+    // THEN nothing invites them into the admin area, once the page has actually loaded rather
+    // than still showing its loading screen, where no link is present for an unrelated reason
+    await expect(page.getByRole('heading', { name: 'Dienstplan' })).toBeVisible();
     await expect(page.getByRole('link', { name: /Admin-Bereich/i })).toHaveCount(0);
 
     // GIVEN an approved admin instead
@@ -145,5 +150,26 @@ test.describe('Member duty plan', () => {
 
     // THEN the empty state names the real reason
     await expect(page.getByText(/noch kein Dienstplan veröffentlicht/i)).toBeVisible();
+  });
+
+  test('shows a failed query as an error rather than a false empty plan', async ({ page }) => {
+    // GIVEN an approved member whose schedule query fails
+    await givenMemberSession(page, {
+      profile: { id: 'm-1', name: 'Mem Ber', is_approved: true, is_admin: false },
+    });
+    await page.route(url => url.href.includes('/rest/v1/published_schedule'), route =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'boom', details: '', hint: '', code: '500' }),
+      }),
+    );
+
+    // WHEN they open the plan
+    await page.goto('/dienstplan');
+
+    // THEN the real error is shown, and the unrelated empty-plan message is not
+    await expect(page.getByText(/Der Dienstplan konnte nicht geladen werden/i)).toBeVisible();
+    await expect(page.getByText(/noch kein Dienstplan veröffentlicht/i)).toHaveCount(0);
   });
 });
