@@ -92,4 +92,4 @@ WHERE
     EXTRACT(DOW FROM d) IN (2, 3)
     AND ( (d::date - '2026-05-05'::date) % 21 < 2 )
   )
-ON CONFLICT (date) DO NOTHING;
+ON CONFLICT (date, bereich) DO NOTHING;

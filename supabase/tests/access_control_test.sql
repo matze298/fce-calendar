@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(33);
+SELECT plan(37);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -317,6 +317,30 @@ RESET ROLE;
 -- THEN no email address is reachable through the view, which is why it exists at all
 SELECT hasnt_column('public', 'published_schedule', 'email',
                     'the schedule exposes no email column');
+
+-- GIVEN one calendar date that needs staffing in two Bereiche
+INSERT INTO work_dates (id, date, bereich, name, start_time, required_people) VALUES
+  ('ffffffff-0000-0000-0000-000000000001', '2099-03-01', 'Sportheim-Bewirtung', 'Heimspiel', '15:30', 2),
+  ('ffffffff-0000-0000-0000-000000000002', '2099-03-01', 'Sportplatz-Ordner',   'Heimspiel', '14:00', 3);
+
+-- THEN both rows exist, which UNIQUE(date) alone would have refused
+SELECT is((SELECT count(*) FROM work_dates WHERE date = '2099-03-01'), 2::bigint,
+          'one date carries staffing for two Bereiche');
+
+-- THEN a second row for the same date AND the same Bereich is still refused
+SELECT throws_ok(
+  $$INSERT INTO work_dates (date, bereich) VALUES ('2099-03-01', 'Sportheim-Bewirtung')$$,
+  '23505', NULL, 'the same date and Bereich cannot be entered twice');
+
+-- THEN every date that existed before this migration is a Sportheim-Bewirtung date, which is what
+-- the column default backfilled and what is historically true
+SELECT is((SELECT count(*) FROM work_dates WHERE date < '2099-01-01' AND bereich <> 'Sportheim-Bewirtung'),
+          0::bigint,
+          'pre-existing dates all belong to Sportheim-Bewirtung');
+
+-- THEN the member read model carries the Bereich, so a consumer can group by it
+SELECT has_column('public', 'published_schedule', 'bereich',
+                  'the schedule exposes the Bereich');
 
 SELECT * FROM finish();
 ROLLBACK;
