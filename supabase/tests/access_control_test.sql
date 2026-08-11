@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(33);
+SELECT plan(32);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -208,16 +208,9 @@ INSERT INTO work_dates (id, date, name, start_time) VALUES
   ('dddddddd-0000-0000-0000-000000000001', '2099-01-10', 'Heimspiel', '15:30'),
   ('dddddddd-0000-0000-0000-000000000002', '2099-01-17', 'Auswaertsspiel', '20:00');
 
--- GIVEN also an approved member holding nothing, and an auth account for them
-INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
-  ('aaaaaaaa-0000-0000-0000-000000000004', 'pgtap.leer@example.com',
-   '{"first_name":"Leer","last_name":"Ohne"}'::jsonb);
-
 INSERT INTO members (id, auth_id, name, email, is_admin, is_approved) VALUES
   ('eeeeeeee-0000-0000-0000-000000000001', NULL, 'Kol Lege', 'pgtap.kollege@example.com', false, true),
-  ('eeeeeeee-0000-0000-0000-000000000002', NULL, 'Ent Wurf', 'pgtap.entwurf@example.com', false, true),
-  ('eeeeeeee-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000004',
-   'Leer Ohne', 'pgtap.leer@example.com', false, true);
+  ('eeeeeeee-0000-0000-0000-000000000002', NULL, 'Ent Wurf', 'pgtap.entwurf@example.com', false, true);
 
 INSERT INTO assignments (member_id, workdate_id, status)
 SELECT m.id, 'dddddddd-0000-0000-0000-000000000001', 'Published'
@@ -234,89 +227,73 @@ INSERT INTO assignments (member_id, workdate_id, status) VALUES
   ('eeeeeeee-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002', 'Published'),
   ('eeeeeeee-0000-0000-0000-000000000002', 'dddddddd-0000-0000-0000-000000000001', 'Draft');
 
--- GIVEN a fifth approved member whose only assignment on the shared date is a Draft, not a
--- Published one, distinct from Ent Wurf, who is never a JWT subject in this suite
-INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
-  ('aaaaaaaa-0000-0000-0000-000000000005', 'pgtap.eigenerentwurf@example.com',
-   '{"first_name":"Eigener","last_name":"Entwurf"}'::jsonb);
-
-INSERT INTO members (id, auth_id, name, email, is_admin, is_approved) VALUES
-  ('eeeeeeee-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000005',
-   'Eigener Entwurf', 'pgtap.eigenerentwurf@example.com', false, true);
-
-INSERT INTO assignments (member_id, workdate_id, status) VALUES
-  ('eeeeeeee-0000-0000-0000-000000000004', 'dddddddd-0000-0000-0000-000000000001', 'Draft');
-
--- WHEN the member reads their roster
+-- WHEN an approved member reads the published schedule
 SELECT set_config('request.jwt.claims',
                   json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000002',
                                     'role', 'authenticated')::text, true);
 SET LOCAL ROLE authenticated;
 
--- THEN they see themselves and the colleague on their own date, and nobody else
+-- THEN they see a date they are not assigned to, which is the point of the widened read model.
+-- Mem Ber holds nothing on 2099-01-17, so this row can only come from the plan being club wide.
+SELECT is((SELECT count(*) FROM published_schedule
+            WHERE date = '2099-01-17' AND member_name = 'Kol Lege'),
+          1::bigint,
+          'an approved member sees a published date they are not assigned to');
+
+-- THEN every published person on the fixture dates is listed. Scoped to 2099 so a future seed
+-- gaining assignments cannot change the expected set.
 SELECT set_eq(
-  'SELECT member_name FROM my_shift_roster',
-  ARRAY['Mem Ber', 'Kol Lege'],
-  'the roster lists the member and the colleague sharing their date');
+  $$SELECT DISTINCT member_name FROM published_schedule WHERE date >= '2099-01-01'$$,
+  ARRAY['Mem Ber', 'Kol Lege', 'Uno Approved'],
+  'the schedule lists every published person on the fixture dates');
 
--- THEN only their own date appears, so a colleague's unrelated shift stays private
-SELECT set_eq('SELECT DISTINCT date::text FROM my_shift_roster', ARRAY['2099-01-10'],
-              'the roster names the correct date');
-
--- THEN a drafted person is absent, so an unpublished plan cannot tell anyone they are working
-SELECT is((SELECT count(*) FROM my_shift_roster WHERE member_name = 'Ent Wurf'), 0::bigint,
-          'a drafted assignment does not appear on the roster');
+-- THEN a drafted assignment is absent, so an unpublished plan cannot tell anyone they are working
+SELECT is((SELECT count(*) FROM published_schedule WHERE member_name = 'Ent Wurf'), 0::bigint,
+          'a drafted assignment does not appear on the schedule');
 
 RESET ROLE;
 
--- WHEN a member whose only assignment on that date is a Draft reads the roster
-SELECT set_config('request.jwt.claims',
-                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000005',
-                                    'role', 'authenticated')::text, true);
-SET LOCAL ROLE authenticated;
--- THEN it is empty, so a draft plan does not tell them they are working alongside a colleague
-SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
-          'a member whose own assignment is a draft sees an empty roster');
-RESET ROLE;
-
--- WHEN an approved member holding no assignment at all reads the roster
-SELECT set_config('request.jwt.claims',
-                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000004',
-                                    'role', 'authenticated')::text, true);
-SET LOCAL ROLE authenticated;
--- THEN it is empty rather than showing the whole club
-SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
-          'an approved member with no shifts sees an empty roster');
-RESET ROLE;
-
--- WHEN a member who has not been approved reads the roster, while holding a published shift
+-- WHEN a member who has not been approved reads the schedule, while holding a published shift
 SELECT set_config('request.jwt.claims',
                   json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000003',
                                     'role', 'authenticated')::text, true);
 SET LOCAL ROLE authenticated;
--- THEN it is empty, so a pending account learns nothing from a stray assignment
-SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
-          'an unapproved member sees an empty roster despite holding a shift');
+-- THEN it is empty, so a pending account learns nothing
+SELECT is((SELECT count(*) FROM published_schedule), 0::bigint,
+          'an unapproved member sees an empty schedule despite holding a shift');
 RESET ROLE;
 
--- WHEN an authenticated caller's JWT carries no sub claim at all
-SELECT set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+-- WHEN an authenticated caller with no members row at all reads the schedule. This is the state of
+-- someone who has registered and whose claim an admin has not yet linked, which is the most common
+-- real state for a new account.
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'bbbbbbbb-0000-0000-0000-000000000001',
+                                    'role', 'authenticated')::text, true);
 SET LOCAL ROLE authenticated;
--- THEN the roster is empty, so a missing identity does not fall through to every row in the database
-SELECT is((SELECT count(*) FROM my_shift_roster), 0::bigint,
-          'an authenticated caller with no sub claim sees an empty roster');
+-- THEN it is empty rather than falling through to the whole plan
+SELECT is((SELECT count(*) FROM published_schedule), 0::bigint,
+          'an authenticated caller with no members row sees an empty schedule');
+RESET ROLE;
+
+-- WHEN an authenticated caller carries no sub claim
+SELECT set_config('request.jwt.claims', json_build_object('role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+-- THEN it is empty. The 51 seeded members all have auth_id NULL, so a NULL-permissive comparison
+-- here would expose the entire plan.
+SELECT is((SELECT count(*) FROM published_schedule), 0::bigint,
+          'an authenticated caller with no sub claim sees an empty schedule');
 RESET ROLE;
 
 -- GIVEN an unauthenticated visitor
 SET LOCAL ROLE anon;
--- THEN the view is refused, so the roster is not a way around the members table
-SELECT throws_ok('SELECT count(*) FROM my_shift_roster', '42501', NULL,
-                 'anon is refused on the roster');
+-- THEN the view is refused, so it is not a way around the members table
+SELECT throws_ok('SELECT count(*) FROM published_schedule', '42501', NULL,
+                 'anon is refused on the schedule');
 RESET ROLE;
 
 -- THEN no email address is reachable through the view, which is why it exists at all
-SELECT hasnt_column('public', 'my_shift_roster', 'email',
-                    'the roster exposes no email column');
+SELECT hasnt_column('public', 'published_schedule', 'email',
+                    'the schedule exposes no email column');
 
 SELECT * FROM finish();
 ROLLBACK;
