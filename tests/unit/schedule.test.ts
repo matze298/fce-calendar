@@ -233,17 +233,21 @@ describe('generateAssignments edge cases', () => {
 
 describe('generateAssignments across Bereiche', () => {
   it('never offers a Bereich to a member who is not available for it', () => {
-    // GIVEN one Fruehschoppen date and two members, only one of whom does Fruehschoppen
+    // GIVEN one Fruehschoppen date and two members, only one of whom does Fruehschoppen. Both start
+    // tied on shift count, and the tie-break keeps incoming order, so the unavailable member is
+    // listed first deliberately: that way the assertion only passes if the availability filter is
+    // what excludes them, rather than the tie-break happening to favor the other member anyway.
     const workDates = [workDate('w1', '2026-09-20', { bereich: 'Fruehschoppen' })];
     const members = [
-      member('does-it', { bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
       member('does-not', { bereiche: ['Sportheim-Bewirtung'] }),
+      member('does-it', { bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
     ];
 
     // WHEN generating
     const drafts = generateAssignments({ members, workDates });
 
-    // THEN only the available member is picked, even though the other has fewer shifts
+    // THEN only the available member is picked, even though the unavailable one is listed first
+    // and both are tied on shift count
     expect(drafts.map(d => d.member_id)).toEqual(['does-it']);
   });
 
@@ -352,7 +356,9 @@ describe('generateAssignments across Bereiche', () => {
       cooldownDays: 0,
     });
 
-    // THEN it neither crashes nor silently counts toward a Bereich it cannot be attributed to
-    expect(drafts).toHaveLength(1);
+    // THEN it goes to a rather than being held against them: the unattributed published assignment
+    // must not inflate a's shift count, or the tie would break toward b instead. Checking length
+    // alone would not catch that, since either member filling the one slot yields length 1.
+    expect(drafts.map(d => d.member_id)).toEqual(['a']);
   });
 });
