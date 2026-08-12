@@ -8,6 +8,7 @@ function member(id: string, overrides: Partial<ScheduleMember> = {}): ScheduleMe
     seniority_level: 'Junior',
     availability: 'Any',
     historical_shifts: 0,
+    bereiche: ['Sportheim-Bewirtung'],
     ...overrides,
   };
 }
@@ -16,6 +17,7 @@ function workDate(id: string, date: string, overrides: Partial<ScheduleWorkDate>
   return {
     id,
     date,
+    bereich: 'Sportheim-Bewirtung',
     required_people: 1,
     is_important_shift: false,
     is_weekend: false,
@@ -226,5 +228,131 @@ describe('generateAssignments edge cases', () => {
 
     // THEN it still counts toward fairness but cannot be measured for cooldown, so the run proceeds
     expect(assignments).toEqual([{ member_id: 'a', workdate_id: '101', status: 'Draft' }]);
+  });
+});
+
+describe('generateAssignments across Bereiche', () => {
+  it('never offers a Bereich to a member who is not available for it', () => {
+    // GIVEN one Fruehschoppen date and two members, only one of whom does Fruehschoppen
+    const workDates = [workDate('w1', '2026-09-20', { bereich: 'Fruehschoppen' })];
+    const members = [
+      member('does-it', { bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
+      member('does-not', { bereiche: ['Sportheim-Bewirtung'] }),
+    ];
+
+    // WHEN generating
+    const drafts = generateAssignments({ members, workDates });
+
+    // THEN only the available member is picked, even though the other has fewer shifts
+    expect(drafts.map(d => d.member_id)).toEqual(['does-it']);
+  });
+
+  it('counts fairness separately per Bereich', () => {
+    // GIVEN a member heavy on published Sportheim duties and light on Fruehschoppen, against a
+    // member with the reverse
+    const workDates = [workDate('f1', '2026-09-20', { bereich: 'Fruehschoppen' })];
+    const members = [
+      member('sportheim-heavy', { bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
+      member('fruehschoppen-heavy', { bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
+    ];
+    const publishedAssignments = [
+      { member_id: 'sportheim-heavy', workdate_id: 's-past-1' },
+      { member_id: 'sportheim-heavy', workdate_id: 's-past-2' },
+      { member_id: 'fruehschoppen-heavy', workdate_id: 'f-past-1' },
+    ];
+    const pastDates = [
+      workDate('s-past-1', '2026-01-05', { bereich: 'Sportheim-Bewirtung' }),
+      workDate('s-past-2', '2026-01-12', { bereich: 'Sportheim-Bewirtung' }),
+      workDate('f-past-1', '2026-01-19', { bereich: 'Fruehschoppen' }),
+    ];
+
+    // WHEN generating the Fruehschoppen date
+    const drafts = generateAssignments({
+      members,
+      workDates: [...pastDates, ...workDates],
+      publishedAssignments,
+      cooldownDays: 0,
+    });
+
+    // THEN the member with fewer Fruehschoppen duties wins, even though they have more duties
+    // overall, because each Bereich keeps its own rota
+    const chosen = drafts.filter(d => d.workdate_id === 'f1');
+    expect(chosen.map(d => d.member_id)).toEqual(['sportheim-heavy']);
+  });
+
+  it('counts historical_shifts toward Sportheim-Bewirtung only', () => {
+    // GIVEN a veteran with fifteen recorded duties and a newcomer with none, both available for
+    // both Bereiche
+    const members = [
+      member('veteran', { historical_shifts: 15, bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
+      member('newcomer', { historical_shifts: 0, bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] }),
+    ];
+
+    // WHEN a Sportheim date is filled
+    const sportheim = generateAssignments({
+      members,
+      workDates: [workDate('s1', '2026-09-20', { bereich: 'Sportheim-Bewirtung' })],
+    });
+
+    // THEN the newcomer goes first, because the recorded duties were Sportheim duties
+    expect(sportheim.map(d => d.member_id)).toEqual(['newcomer']);
+
+    // WHEN a Fruehschoppen date is filled instead
+    const fruehschoppen = generateAssignments({
+      members,
+      workDates: [workDate('f1', '2026-09-20', { bereich: 'Fruehschoppen' })],
+    });
+
+    // THEN the veteran is no longer penalized, because nobody has worked Fruehschoppen at all and
+    // the recorded duties say nothing about it. Ties keep incoming order, so the veteran is first.
+    expect(fruehschoppen.map(d => d.member_id)).toEqual(['veteran']);
+  });
+
+  it('never places one member twice on the same calendar date', () => {
+    // GIVEN a date needing both Bereiche and only one available member
+    const workDates = [
+      workDate('s1', '2026-09-20', { bereich: 'Sportheim-Bewirtung', required_people: 1 }),
+      workDate('o1', '2026-09-20', { bereich: 'Sportplatz-Ordner', required_people: 1 }),
+    ];
+    const members = [member('only-one', { bereiche: ['Sportheim-Bewirtung', 'Sportplatz-Ordner'] })];
+
+    // WHEN generating
+    const drafts = generateAssignments({ members, workDates, cooldownDays: 0 });
+
+    // THEN they take exactly one of the two, and the other stays unfilled rather than
+    // double-booking them, which the database would refuse anyway
+    expect(drafts).toHaveLength(1);
+  });
+
+  it('places the same member on adjacent dates in different Bereiche when cooldown allows', () => {
+    // GIVEN two neighboring dates in different Bereiche and no cooldown
+    const workDates = [
+      workDate('s1', '2026-09-20', { bereich: 'Sportheim-Bewirtung' }),
+      workDate('o1', '2026-09-21', { bereich: 'Sportplatz-Ordner' }),
+    ];
+    const members = [member('willing', { bereiche: ['Sportheim-Bewirtung', 'Sportplatz-Ordner'] })];
+
+    // WHEN generating with cooldown off
+    const drafts = generateAssignments({ members, workDates, cooldownDays: 0 });
+
+    // THEN both are filled, because the rule is one duty per date and not one duty per weekend
+    expect(drafts).toHaveLength(2);
+  });
+
+  it('ignores a published assignment whose work date was not supplied', () => {
+    // GIVEN a published assignment pointing at a date the caller did not pass in
+    const workDates = [workDate('s1', '2026-09-20', { bereich: 'Sportheim-Bewirtung' })];
+    const members = [member('a'), member('b')];
+
+    // WHEN generating
+    const drafts = generateAssignments({
+      members,
+      workDates,
+      publishedAssignments: [{ member_id: 'a', workdate_id: 'unknown-date' }],
+      cooldownDays: 0,
+    });
+
+    // THEN it neither crashes nor silently counts toward a Bereich it cannot be attributed to
+    expect(drafts).toHaveLength(1);
   });
 });
