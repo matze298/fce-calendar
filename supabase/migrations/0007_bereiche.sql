@@ -131,3 +131,8 @@ $$;
 DROP TRIGGER IF EXISTS on_assignment_double_booking ON assignments;
 CREATE TRIGGER on_assignment_double_booking BEFORE INSERT ON assignments
   FOR EACH ROW EXECUTE FUNCTION public.reject_double_booking();
+
+-- Without this, PostgREST keeps answering PGRST205 for the new table and the changed view until it
+-- reloads its schema cache on its own. NOTIFY inside a transaction is delivered at commit, so this
+-- fires only once the changes above are in effect.
+NOTIFY pgrst, 'reload schema';
