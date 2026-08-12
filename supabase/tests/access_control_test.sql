@@ -377,8 +377,13 @@ INSERT INTO members (id, name, email, is_approved) VALUES
   ('eeeeeeee-0000-0000-0000-000000000007', 'Vor Migration', 'pgtap.vormigration@example.com', true);
 DELETE FROM member_bereiche WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000007';
 
--- WHEN the migration's backfill statement runs, re-inserting the default Bereich for every
--- member, including the ones who already have it
+-- WHEN a statement matching the migration's backfill runs, re-inserting the default Bereich for
+-- every member, including the ones who already have it. This is a deliberate copy of that
+-- statement's text, not an execution of the migration's own copy: db reset always applies the
+-- migration before the seed, so no member here is ever observably without a Bereich row at any
+-- point this suite can see, which makes the migration's actual backfill statement itself
+-- untestable from within this file. What is covered below is the statement's logic in isolation,
+-- that it restores a missing row and tolerates every already-populated member without raising.
 INSERT INTO member_bereiche (member_id, bereich)
 SELECT id, 'Sportheim-Bewirtung' FROM members
 ON CONFLICT DO NOTHING;
