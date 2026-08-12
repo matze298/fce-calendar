@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(44);
+SELECT plan(47);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -420,6 +420,36 @@ SET LOCAL ROLE anon;
 SELECT throws_ok('SELECT count(*) FROM member_bereiche', '42501', NULL,
                  'anon is refused on member_bereiche');
 RESET ROLE;
+
+-- GIVEN a member assigned to the Sportheim shift on a date that also needs marshals
+INSERT INTO work_dates (id, date, bereich, required_people) VALUES
+  ('ffffffff-0000-0000-0000-000000000003', '2099-03-08', 'Sportplatz-Ordner', 1);
+
+INSERT INTO assignments (member_id, workdate_id, status)
+SELECT m.id, 'ffffffff-0000-0000-0000-000000000001', 'Published'
+  FROM members m WHERE m.email = 'pgtap.member@example.com';
+
+-- THEN they cannot also be given the marshal duty on that same date
+SELECT throws_ok(
+  $$INSERT INTO assignments (member_id, workdate_id, status)
+    SELECT m.id, 'ffffffff-0000-0000-0000-000000000002', 'Draft'
+      FROM members m WHERE m.email = 'pgtap.member@example.com'$$,
+  '23505', NULL, 'a member cannot hold two Bereiche on one date');
+
+-- THEN a different member can take that marshal duty, so the rule is about the person and not
+-- about the date being full
+SELECT lives_ok(
+  $$INSERT INTO assignments (member_id, workdate_id, status)
+    VALUES ('eeeeeeee-0000-0000-0000-000000000001',
+            'ffffffff-0000-0000-0000-000000000002', 'Draft')$$,
+  'another member can take the same date in a different Bereich');
+
+-- THEN the same member is free on a different date, so the rule is not blocking everything
+SELECT lives_ok(
+  $$INSERT INTO assignments (member_id, workdate_id, status)
+    SELECT m.id, 'ffffffff-0000-0000-0000-000000000003', 'Draft'
+      FROM members m WHERE m.email = 'pgtap.member@example.com'$$,
+  'the same member takes a duty on a different date');
 
 SELECT * FROM finish();
 ROLLBACK;

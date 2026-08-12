@@ -101,3 +101,33 @@ CREATE TRIGGER on_member_created AFTER INSERT ON members
 INSERT INTO member_bereiche (member_id, bereich)
 SELECT id, 'Sportheim-Bewirtung' FROM members
 ON CONFLICT DO NOTHING;
+
+-- One duty per member per calendar date, whatever the Bereich. Two work_dates rows can share a
+-- date, so a unique index cannot express this: the check has to join through work_dates.
+CREATE OR REPLACE FUNCTION public.reject_double_booking()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  target_date DATE;
+BEGIN
+  SELECT date INTO target_date FROM public.work_dates WHERE id = NEW.workdate_id;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.assignments a
+      JOIN public.work_dates wd ON wd.id = a.workdate_id
+     WHERE a.member_id = NEW.member_id
+       AND wd.date = target_date
+  ) THEN
+    -- unique_violation so callers already handling 23505 keep working, and so a test can assert a
+    -- stable code rather than message text.
+    RAISE EXCEPTION 'Mitglied % ist am % bereits eingeteilt', NEW.member_id, target_date
+      USING ERRCODE = 'unique_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_assignment_double_booking ON assignments;
+CREATE TRIGGER on_assignment_double_booking BEFORE INSERT ON assignments
+  FOR EACH ROW EXECUTE FUNCTION public.reject_double_booking();
