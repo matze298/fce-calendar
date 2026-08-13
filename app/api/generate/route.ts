@@ -38,9 +38,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { data: members } = await supabase
+    const { data: memberRows } = await supabase
       .from('members')
-      .select('*')
+      .select('*, member_bereiche(bereich)')
       .eq('exempt', false)
       .eq('is_approved', true);
     const { data: workDates } = await supabase.from('work_dates').select('*').order('date', { ascending: true });
@@ -49,9 +49,14 @@ export async function POST(request: Request) {
       .select('member_id, workdate_id')
       .eq('status', 'Published');
 
-    if (!members || !workDates) {
+    if (!memberRows || !workDates) {
       return NextResponse.json({ error: 'Keine Mitglieder oder Arbeitstage gefunden' }, { status: 400 });
     }
+
+    const members = memberRows.map(row => ({
+      ...row,
+      bereiche: (row.member_bereiche ?? []).map((b: { bereich: string }) => b.bereich),
+    }));
 
     // Missing settings fall back to the seeded default rather than failing the run.
     const { data: settings } = await supabase.from('settings').select('cooldown_days').limit(1).maybeSingle();

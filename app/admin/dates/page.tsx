@@ -98,12 +98,13 @@ export default function ManageDatesPage() {
       .from('work_dates')
       .upsert({
         date: selectedDate,
+        bereich: 'Sportheim-Bewirtung',
         name: name.trim() || null,
         start_time: startTime || null,
         required_people: requiredPeople,
         is_important_shift: isImportant,
         is_weekend: isWeekendDate(selectedDate)
-      }, { onConflict: 'date' });
+      }, { onConflict: 'date,bereich' });
 
     if (error) {
       alert('Fehler beim Speichern: ' + error.message);

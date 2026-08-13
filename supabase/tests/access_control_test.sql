@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(33);
+SELECT plan(52);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -317,6 +317,199 @@ RESET ROLE;
 -- THEN no email address is reachable through the view, which is why it exists at all
 SELECT hasnt_column('public', 'published_schedule', 'email',
                     'the schedule exposes no email column');
+
+-- GIVEN one calendar date that needs staffing in two Bereiche
+INSERT INTO work_dates (id, date, bereich, name, start_time, required_people) VALUES
+  ('ffffffff-0000-0000-0000-000000000001', '2099-03-01', 'Sportheim-Bewirtung', 'Heimspiel', '15:30', 2),
+  ('ffffffff-0000-0000-0000-000000000002', '2099-03-01', 'Sportplatz-Ordner',   'Heimspiel', '14:00', 3);
+
+-- THEN both rows exist, which UNIQUE(date) alone would have refused
+SELECT is((SELECT count(*) FROM work_dates WHERE date = '2099-03-01'), 2::bigint,
+          'one date carries staffing for two Bereiche');
+
+-- THEN a second row for the same date AND the same Bereich is still refused
+SELECT throws_ok(
+  $$INSERT INTO work_dates (date, bereich) VALUES ('2099-03-01', 'Sportheim-Bewirtung')$$,
+  '23505', NULL, 'the same date and Bereich cannot be entered twice');
+
+-- WHEN an upsert names the real unique constraint, (date, bereich), as its conflict target
+-- THEN it succeeds, updating the existing row rather than raising
+SELECT lives_ok(
+  $$INSERT INTO work_dates (date, bereich, required_people) VALUES ('2099-03-01', 'Sportheim-Bewirtung', 5)
+      ON CONFLICT (date, bereich) DO UPDATE SET required_people = excluded.required_people$$,
+  'an upsert targeting (date, bereich) succeeds');
+
+-- WHEN an upsert names only the date column as its conflict target
+-- THEN Postgres refuses it outright, because a conflict target must match an existing unique
+-- constraint exactly rather than a subset of one, and the only one covering date also covers
+-- bereich. This is the contract app/admin/dates/page.tsx depends on for every save and edit.
+SELECT throws_ok(
+  $$INSERT INTO work_dates (date, bereich) VALUES ('2099-03-01', 'Sportheim-Bewirtung')
+      ON CONFLICT (date) DO UPDATE SET required_people = excluded.required_people$$,
+  '42P10', NULL, 'an upsert targeting only (date) is refused');
+
+-- THEN every date that existed before this migration is a Sportheim-Bewirtung date, which is what
+-- the column default backfilled and what is historically true
+SELECT is((SELECT count(*) FROM work_dates WHERE date < '2099-01-01' AND bereich <> 'Sportheim-Bewirtung'),
+          0::bigint,
+          'pre-existing dates all belong to Sportheim-Bewirtung');
+
+-- THEN the member read model carries the Bereich, so a consumer can group by it
+SELECT has_column('public', 'published_schedule', 'bereich',
+                  'the schedule exposes the Bereich');
+
+-- GIVEN a brand new member, created the way the admin UI creates one
+INSERT INTO members (id, name, email, is_approved) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000006', 'Neu Bereich', 'pgtap.neubereich@example.com', true);
+
+-- THEN they are available for exactly Sportheim-Bewirtung and nothing else
+SELECT set_eq(
+  $$SELECT bereich::text FROM member_bereiche
+     WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'$$,
+  ARRAY['Sportheim-Bewirtung'],
+  'a new member defaults to Sportheim-Bewirtung only');
+
+-- WHEN an admin adds a second Bereich to that member by hand, alongside their default one
+INSERT INTO member_bereiche (member_id, bereich)
+  VALUES ('eeeeeeee-0000-0000-0000-000000000006', 'Fruehschoppen');
+-- THEN both rows are present, so the member now holds two Bereiche
+SELECT is((SELECT count(*) FROM member_bereiche
+            WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'),
+          2::bigint,
+          'an admin can add a second Bereich to a member');
+
+-- GIVEN an approved admin, reading Bereich rows that belong to a member other than themselves
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000001',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+-- WHEN they read that other member's availability
+-- THEN both rows come back, which is what the generator's admin-scoped read of member_bereiche
+-- depends on to see every member's availability rather than just the admin's own
+SELECT is((SELECT count(*) FROM member_bereiche
+            WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'),
+          2::bigint,
+          'an admin reads another member''s Bereich availability');
+RESET ROLE;
+
+-- GIVEN a brand new member and their default Bereich row, inserted together in a single
+-- data-modifying CTE
+-- WHEN that statement runs. Both explicit inserts complete before the row-level AFTER trigger
+-- fires, since AFTER ROW triggers are queued to statement end, so the trigger's own default-row
+-- insert for the same member_id and Bereich collides with the one the CTE already made
+-- THEN the statement still succeeds, because ON CONFLICT DO NOTHING in grant_default_bereich()
+-- absorbs that collision rather than raising
+SELECT lives_ok(
+  $$WITH new_member AS (
+      INSERT INTO members (id, name, email, is_approved)
+      VALUES ('eeeeeeee-0000-0000-0000-000000000008', 'Schon Da', 'pgtap.schonda@example.com', true)
+      RETURNING id
+    ), new_bereich AS (
+      INSERT INTO member_bereiche (member_id, bereich)
+      SELECT id, 'Sportheim-Bewirtung' FROM new_member
+      RETURNING member_id
+    )
+    SELECT * FROM new_bereich$$,
+  'inserting a member and their default Bereich row in one statement does not fail');
+
+-- THEN every member that existed before this migration was backfilled
+SELECT is(
+  (SELECT count(*) FROM members m
+    WHERE NOT EXISTS (SELECT 1 FROM member_bereiche mb
+                       WHERE mb.member_id = m.id
+                         AND mb.bereich = 'Sportheim-Bewirtung')),
+  0::bigint,
+  'every member is available for Sportheim-Bewirtung');
+
+-- GIVEN a member with no Bereich row at all, the state every one of the club's real members was
+-- in before this migration ran, since the trigger did not exist yet to give them one
+INSERT INTO members (id, name, email, is_approved) VALUES
+  ('eeeeeeee-0000-0000-0000-000000000007', 'Vor Migration', 'pgtap.vormigration@example.com', true);
+DELETE FROM member_bereiche WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000007';
+
+-- WHEN a statement matching the migration's backfill runs, re-inserting the default Bereich for
+-- every member, including the ones who already have it. This is a deliberate copy of that
+-- statement's text, not an execution of the migration's own copy: db reset always applies the
+-- migration before the seed, so no member here is ever observably without a Bereich row at any
+-- point this suite can see, which makes the migration's actual backfill statement itself
+-- untestable from within this file. What is covered below is the statement's logic in isolation,
+-- that it restores a missing row and tolerates every already-populated member without raising.
+INSERT INTO member_bereiche (member_id, bereich)
+SELECT id, 'Sportheim-Bewirtung' FROM members
+ON CONFLICT DO NOTHING;
+
+-- THEN the member who had no row has it again, which is what gives the club's pre-existing
+-- members a Bereich on the real database
+SELECT is((SELECT count(*) FROM member_bereiche
+            WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000007'),
+          1::bigint,
+          'the backfill gives an existing member without a Bereich the default one');
+
+-- GIVEN an approved non-admin member
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000002',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+-- THEN they read their own availability, which PR 2's checkboxes need
+SELECT ok((SELECT count(*) FROM member_bereiche) >= 1,
+          'a member reads their own Bereich availability');
+
+-- THEN they read nobody else's
+SELECT is(
+  (SELECT count(*) FROM member_bereiche
+    WHERE member_id <> (SELECT id FROM members WHERE auth_id = 'aaaaaaaa-0000-0000-0000-000000000002')),
+  0::bigint,
+  'a member reads no other member''s availability');
+
+RESET ROLE;
+
+-- GIVEN an unauthenticated visitor
+SET LOCAL ROLE anon;
+-- THEN the table refuses outright, because anon holds no grant
+SELECT throws_ok('SELECT count(*) FROM member_bereiche', '42501', NULL,
+                 'anon is refused on member_bereiche');
+RESET ROLE;
+
+-- GIVEN a member assigned to the Sportheim shift on a date that also needs marshals
+INSERT INTO work_dates (id, date, bereich, required_people) VALUES
+  ('ffffffff-0000-0000-0000-000000000003', '2099-03-08', 'Sportplatz-Ordner', 1);
+
+INSERT INTO assignments (member_id, workdate_id, status)
+SELECT m.id, 'ffffffff-0000-0000-0000-000000000001', 'Published'
+  FROM members m WHERE m.email = 'pgtap.member@example.com';
+
+-- THEN they cannot also be given the marshal duty on that same date
+SELECT throws_ok(
+  $$INSERT INTO assignments (member_id, workdate_id, status)
+    SELECT m.id, 'ffffffff-0000-0000-0000-000000000002', 'Draft'
+      FROM members m WHERE m.email = 'pgtap.member@example.com'$$,
+  '23505', NULL, 'a member cannot hold two Bereiche on one date');
+
+-- THEN a different member can take that marshal duty, so the rule is about the person and not
+-- about the date being full
+SELECT lives_ok(
+  $$INSERT INTO assignments (member_id, workdate_id, status)
+    VALUES ('eeeeeeee-0000-0000-0000-000000000001',
+            'ffffffff-0000-0000-0000-000000000002', 'Draft')$$,
+  'another member can take the same date in a different Bereich');
+
+-- THEN the same member is free on a different date, so the rule is not blocking everything
+SELECT lives_ok(
+  $$INSERT INTO assignments (member_id, workdate_id, status)
+    SELECT m.id, 'ffffffff-0000-0000-0000-000000000003', 'Draft'
+      FROM members m WHERE m.email = 'pgtap.member@example.com'$$,
+  'the same member takes a duty on a different date');
+
+-- WHEN that same member's duty on the other date is moved, by UPDATE rather than INSERT, onto
+-- the Sportplatz-Ordner row that shares a calendar date with the Sportheim duty they already hold
+-- THEN the trigger still refuses, closing the path an INSERT-only trigger would miss
+SELECT throws_ok(
+  $$UPDATE assignments SET workdate_id = 'ffffffff-0000-0000-0000-000000000002'
+     WHERE workdate_id = 'ffffffff-0000-0000-0000-000000000003'
+       AND member_id = (SELECT id FROM members WHERE email = 'pgtap.member@example.com')$$,
+  '23505', NULL, 'moving an assignment onto a date the member already works is refused');
 
 SELECT * FROM finish();
 ROLLBACK;
