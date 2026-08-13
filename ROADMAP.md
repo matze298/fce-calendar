@@ -15,7 +15,7 @@ For what the app does and how it is built, read the blueprints and `docs/WEBAPP_
   cannot log in until real values are filled in. See `DEVELOPER.md` section 3
 - CI gates every PR on pytest with ruff and ty, Playwright E2E, a pgTAP suite run against a local
   Supabase instance, and frontend lint, type check, unit tests and build
-- The pgTAP suite (`supabase/tests/access_control_test.sql`, 32 assertions) exercises the real RLS
+- The pgTAP suite (`supabase/tests/access_control_test.sql`, 47 assertions) exercises the real RLS
   policies and grants against a real Postgres instance. The Playwright suite still mocks the entire
   Supabase layer, so no test exercises authentication or RLS through an actual browser session
 
@@ -155,6 +155,18 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 
 ## After go-live
 
+- **Bereiche surfaces (PR 2).** The data model and the generator already support all three Bereiche
+  (`Sportheim-Bewirtung`, `Fruehschoppen`, `Sportplatz-Ordner`), scoping fairness, cooldown and
+  availability to each. Only the UI is missing: per-member availability checkboxes on
+  `/admin/members`, a Bereich picker on `/admin/dates`, and grouping by Bereich in the PDF export
+  and in the member duty plan
+- `utils/adminGuard.ts` swallows the error from its `members` lookup and reports `forbidden`, so a
+  transient failure tells a real admin their access is denied. Its sibling `utils/memberGuard.ts`
+  was fixed to distinguish an error from a genuine absence, so the two are now inconsistent. Left
+  alone because the change ripples into four admin pages
+- Squash the migration chain, `0001` through `0007`, into one schema file. `0005` still creates
+  `my_shift_roster` while `0006` drops it, so re-running `0005` alone resurrects a view nothing
+  covers. The service is not live, so the chain can be rewritten rather than patched with a warning
 - Neither `utils/memberSchedule.ts` nor `utils/appointmentExport.ts` has a test pinning that dates
   parse through `parseIsoDate` rather than `new Date(isoString)`. Swapping that call back in still
   passes both suites today. `parseIsoDate` builds local midnight while `new Date(isoString)` builds

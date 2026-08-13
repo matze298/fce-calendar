@@ -33,7 +33,17 @@ exception is a view built for member-facing pages:
 
 | Object | Columns | Responsibility |
 | :--- | :--- | :--- |
-| `public.published_schedule` | `workdate_id`, `date`, `event_name`, `start_time`, `member_id`, `member_name` | The whole published plan: one flat row per date/person pair, readable by any approved member. No email address. Feeds `/dienstplan`. |
+| `public.published_schedule` | `workdate_id`, `date`, `event_name`, `start_time`, `member_id`, `member_name`, `bereich` | The whole published plan: one flat row per date/person pair, readable by any approved member. No email address. Feeds `/dienstplan`. |
+| `member_bereiche` | `member_id`, `bereich` | A row means the member is available for that Bereich (duty area). An admin manages every row, and a member reads only their own. |
+
+`work_dates` also carries a `bereich` column (`Sportheim-Bewirtung`, `Fruehschoppen`, or `Sportplatz-Ordner`), defaulting to `Sportheim-Bewirtung`. A calendar date can carry more than one Bereich, so uniqueness is on `(date, bereich)` rather than on `date` alone.
+
+Two triggers enforce invariants the RLS policies above cannot:
+
+| Trigger | Enforces |
+| :--- | :--- |
+| `on_member_created` | A new member gets a `member_bereiche` row for `Sportheim-Bewirtung` automatically. |
+| `on_assignment_double_booking` | A member cannot hold a second assignment on a calendar date already worked, in any Bereich. |
 
 ### 🌍 Shared Logic & Global Files
 - **`app/layout.tsx`**: The "base template" (like a base Jinja2 template). Contains the HTML structure, fonts, and metadata that persist across all pages.
