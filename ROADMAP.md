@@ -158,8 +158,10 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 - **Bereiche surfaces (PR 2).** The data model and the generator already support all three Bereiche
   (`Sportheim-Bewirtung`, `Fruehschoppen`, `Sportplatz-Ordner`), scoping fairness, cooldown and
   availability to each. Only the UI is missing: per-member availability checkboxes on
-  `/admin/members`, a Bereich picker on `/admin/dates`, and grouping by Bereich in the PDF export
-  and in the member duty plan
+  `/admin/members`, a Bereich picker on `/admin/dates`, grouping by Bereich in the PDF export and
+  in the member duty plan, and the Bereich name in the reminder email. `api/cron/send_reminders.py`
+  selects `work_dates(date, name, start_time)` only, so once dates exist in the other two Bereiche a
+  member is reminded of a duty without being told which one
 - `utils/adminGuard.ts` swallows the error from its `members` lookup and reports `forbidden`, so a
   transient failure tells a real admin their access is denied. Its sibling `utils/memberGuard.ts`
   was fixed to distinguish an error from a genuine absence, so the two are now inconsistent. Left
@@ -185,6 +187,13 @@ domain is on Vercel. Link to the subdomain from the main site's navigation inste
 - A clearer message when Supabase is unreachable, rather than passing the raw browser fetch error
   through as "Anmeldung fehlgeschlagen: NetworkError ..."
 - Mobile polish for the admin screens, which are laid out desktop first
+- **Two intermittent Playwright flakes, both in `tests/e2e/admin.spec.ts`, neither ever seen in CI.**
+  `Clicking "Generate Schedule"` occasionally fails with `Target page, context or browser has been
+  closed`, and `Saving the settings page stores the cooldown and all three start time defaults` has
+  failed at `--workers=4` immediately after a `db:reset` plus `build`, then passed every time on
+  rerun. Both surface only under parallelism. Suspected cause for the settings one is Next.js
+  compiling routes on demand on the first run against a cold cache, since every later run hits warm
+  caches
 - **If `utils/memberMatch.ts` suggestions ever prove too noisy or too sparse in real use, score the
   surname and the given name separately and weight the surname heavily, rather than moving the single
   global threshold.** Bigram similarity over the joined name conflates two signals of very different

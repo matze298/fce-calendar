@@ -24,12 +24,13 @@ Next.js and Vercel Serverless Functions handle backend logic. For Python devs, t
 
 | Endpoint | Implementation File | Responsibility |
 | :--- | :--- | :--- |
-| `/api/generate`| `app/api/generate/route.ts` | Builds the draft plan. Requires an `Authorization: Bearer <token>` header carrying the caller's own Supabase session (401 without one, 403 if the caller is not an approved admin). Reads members, work dates, published assignments and the cooldown setting as that caller, then delegates to `utils/schedule.ts` and writes the drafts back. |
+| `/api/generate`| `app/api/generate/route.ts` | Builds the draft plan. Requires an `Authorization: Bearer <token>` header carrying the caller's own Supabase session (401 without one, 403 if the caller is not an approved admin). Reads members with their per-Bereich availability, work dates, published assignments and the cooldown setting as that caller, then delegates to `utils/schedule.ts` and writes the drafts back. |
 | `/api/cron/send_reminders` | `api/cron/send_reminders.py` | **Cron Job**: Automated daily email reminders for members with upcoming shifts. Runs with `SUPABASE_SERVICE_ROLE_KEY` and refuses to start without it. |
 
 ### 🗄️ Database Read Model (`supabase/migrations/`)
-Row Level Security restricts every table to admins except a member's own `members` row. The one
-exception is a view built for member-facing pages:
+Row Level Security restricts every table to admins except a member's own `members` row and their
+own `member_bereiche` rows. The objects below are the additional read surfaces built for
+member-facing pages:
 
 | Object | Columns | Responsibility |
 | :--- | :--- | :--- |
@@ -38,7 +39,7 @@ exception is a view built for member-facing pages:
 
 `work_dates` also carries a `bereich` column (`Sportheim-Bewirtung`, `Fruehschoppen`, or `Sportplatz-Ordner`), defaulting to `Sportheim-Bewirtung`. A calendar date can carry more than one Bereich, so uniqueness is on `(date, bereich)` rather than on `date` alone.
 
-Two triggers enforce invariants the RLS policies above cannot:
+Two triggers sit alongside the RLS policies above:
 
 | Trigger | Enforces |
 | :--- | :--- |

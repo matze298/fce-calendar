@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(47);
+SELECT plan(50);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -332,6 +332,22 @@ SELECT throws_ok(
   $$INSERT INTO work_dates (date, bereich) VALUES ('2099-03-01', 'Sportheim-Bewirtung')$$,
   '23505', NULL, 'the same date and Bereich cannot be entered twice');
 
+-- WHEN an upsert names the real unique constraint, (date, bereich), as its conflict target
+-- THEN it succeeds, updating the existing row rather than raising
+SELECT lives_ok(
+  $$INSERT INTO work_dates (date, bereich, required_people) VALUES ('2099-03-01', 'Sportheim-Bewirtung', 5)
+      ON CONFLICT (date, bereich) DO UPDATE SET required_people = excluded.required_people$$,
+  'an upsert targeting (date, bereich) succeeds');
+
+-- WHEN an upsert names only the old (date) column as its conflict target, the way the admin UI
+-- did before this migration
+-- THEN Postgres refuses it outright, because UNIQUE (date) no longer exists and a conflict target
+-- must match an existing unique constraint exactly rather than a subset of one
+SELECT throws_ok(
+  $$INSERT INTO work_dates (date, bereich) VALUES ('2099-03-01', 'Sportheim-Bewirtung')
+      ON CONFLICT (date) DO UPDATE SET required_people = excluded.required_people$$,
+  '42P10', NULL, 'an upsert targeting only (date) is refused');
+
 -- THEN every date that existed before this migration is a Sportheim-Bewirtung date, which is what
 -- the column default backfilled and what is historically true
 SELECT is((SELECT count(*) FROM work_dates WHERE date < '2099-01-01' AND bereich <> 'Sportheim-Bewirtung'),
@@ -353,14 +369,34 @@ SELECT set_eq(
   ARRAY['Sportheim-Bewirtung'],
   'a new member defaults to Sportheim-Bewirtung only');
 
--- WHEN the default row somehow already exists and the trigger fires again
+-- WHEN an admin adds a second Bereich to that member by hand, alongside their default one
 INSERT INTO member_bereiche (member_id, bereich)
   VALUES ('eeeeeeee-0000-0000-0000-000000000006', 'Fruehschoppen');
--- THEN adding a second Bereich by hand is what an admin does, and it sticks
+-- THEN both rows are present, so the member now holds two Bereiche
 SELECT is((SELECT count(*) FROM member_bereiche
             WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'),
           2::bigint,
           'an admin can add a second Bereich to a member');
+
+-- GIVEN a brand new member and their default Bereich row, inserted together in a single
+-- data-modifying CTE
+-- WHEN that statement runs. Both explicit inserts complete before the row-level AFTER trigger
+-- fires, since AFTER ROW triggers are queued to statement end, so the trigger's own default-row
+-- insert for the same member_id and Bereich collides with the one the CTE already made
+-- THEN the statement still succeeds, because ON CONFLICT DO NOTHING in grant_default_bereich()
+-- absorbs that collision rather than raising
+SELECT lives_ok(
+  $$WITH new_member AS (
+      INSERT INTO members (id, name, email, is_approved)
+      VALUES ('eeeeeeee-0000-0000-0000-000000000008', 'Schon Da', 'pgtap.schonda@example.com', true)
+      RETURNING id
+    ), new_bereich AS (
+      INSERT INTO member_bereiche (member_id, bereich)
+      SELECT id, 'Sportheim-Bewirtung' FROM new_member
+      RETURNING member_id
+    )
+    SELECT * FROM new_bereich$$,
+  'inserting a member and their default Bereich row in one statement does not fail');
 
 -- THEN every member that existed before this migration was backfilled
 SELECT is(

@@ -112,12 +112,13 @@ export function generateAssignments({
 
         const pool = candidates.filter(m => phase.eligible(m) && !busyToday.has(m.id));
 
+        const draftsHere = drafts.filter(d => bereichById.get(d.workdate_id) === bereich);
         const rested = pool.filter(
           m =>
             !isInCooldown(m.id, date.id, {
               dateById,
               publishedAssignments: publishedHere,
-              drafts: drafts.filter(d => bereichById.get(d.workdate_id) === bereich),
+              drafts: draftsHere,
               cooldownDays,
             }),
         );

@@ -104,6 +104,14 @@ ON CONFLICT DO NOTHING;
 
 -- One duty per member per calendar date, whatever the Bereich. Two work_dates rows can share a
 -- date, so a unique index cannot express this: the check has to join through work_dates.
+--
+-- AFTER INSERT rather than BEFORE: a BEFORE ROW trigger runs before RLS evaluates its WITH CHECK
+-- policy, so it would answer this question for a caller RLS was about to refuse outright. A
+-- non-admin holds a table-level INSERT grant on assignments but every write is gated behind
+-- is_admin() in the row policy, so under BEFORE INSERT a non-admin probing another member's date
+-- would get a different error depending on whether that member already has a duty there, which
+-- is a working oracle over Draft assignments RLS otherwise hides. AFTER INSERT lets RLS reject
+-- the non-admin first, so every such probe gets the same 42501.
 CREATE OR REPLACE FUNCTION public.reject_double_booking()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -117,6 +125,9 @@ BEGIN
       JOIN public.work_dates wd ON wd.id = a.workdate_id
      WHERE a.member_id = NEW.member_id
        AND wd.date = target_date
+       -- Under AFTER INSERT, NEW's own row is already visible to this query, so it has to be
+       -- excluded or the row would always match itself and every insert would be refused.
+       AND a.id <> NEW.id
   ) THEN
     -- unique_violation so callers already handling 23505 keep working, and so a test can assert a
     -- stable code rather than message text.
@@ -129,7 +140,7 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS on_assignment_double_booking ON assignments;
-CREATE TRIGGER on_assignment_double_booking BEFORE INSERT ON assignments
+CREATE TRIGGER on_assignment_double_booking AFTER INSERT ON assignments
   FOR EACH ROW EXECUTE FUNCTION public.reject_double_booking();
 
 -- Without this, PostgREST keeps answering PGRST205 for the new table and the changed view until it
