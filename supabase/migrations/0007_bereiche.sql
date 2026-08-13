@@ -105,19 +105,30 @@ ON CONFLICT DO NOTHING;
 -- One duty per member per calendar date, whatever the Bereich. Two work_dates rows can share a
 -- date, so a unique index cannot express this: the check has to join through work_dates.
 --
--- AFTER INSERT rather than BEFORE: a BEFORE ROW trigger runs before RLS evaluates its WITH CHECK
--- policy, so it would answer this question for a caller RLS was about to refuse outright. A
--- non-admin holds a table-level INSERT grant on assignments but every write is gated behind
--- is_admin() in the row policy, so under BEFORE INSERT a non-admin probing another member's date
--- would get a different error depending on whether that member already has a duty there, which
--- is a working oracle over Draft assignments RLS otherwise hides. AFTER INSERT lets RLS reject
--- the non-admin first, so every such probe gets the same 42501.
+-- AFTER rather than BEFORE: a BEFORE ROW trigger runs before RLS evaluates its WITH CHECK policy,
+-- so it would answer this question for a caller RLS was about to refuse outright. A non-admin
+-- holds a table-level DML grant on assignments but every write is gated behind is_admin() in the
+-- row policy, so under BEFORE a non-admin probing another member's date would get a different
+-- error depending on whether that member already has a duty there, which is a working oracle
+-- over Draft assignments RLS otherwise hides. AFTER lets RLS reject the non-admin first, so every
+-- such probe gets the same 42501.
+--
+-- Fires on UPDATE OF member_id or workdate_id too, since either column can move an existing
+-- assignment onto a date its member already works, which an INSERT-only trigger cannot catch.
 CREATE OR REPLACE FUNCTION public.reject_double_booking()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   target_date DATE;
+  offender_name TEXT;
 BEGIN
   SELECT date INTO target_date FROM public.work_dates WHERE id = NEW.workdate_id;
+
+  -- Serializes every insert or update touching this member behind one lock per transaction, so
+  -- two concurrent transactions booking the same member on the same date cannot both pass the
+  -- EXISTS check below before either commits, which READ COMMITTED alone would allow. A hashtext
+  -- collision between two different member ids only serializes two unrelated writes, which is
+  -- harmless.
+  PERFORM pg_advisory_xact_lock(hashtext(NEW.member_id::text));
 
   IF EXISTS (
     SELECT 1
@@ -125,13 +136,17 @@ BEGIN
       JOIN public.work_dates wd ON wd.id = a.workdate_id
      WHERE a.member_id = NEW.member_id
        AND wd.date = target_date
-       -- Under AFTER INSERT, NEW's own row is already visible to this query, so it has to be
-       -- excluded or the row would always match itself and every insert would be refused.
+       -- Under AFTER, NEW's own row is already visible to this query whether it was just
+       -- inserted or updated, so it has to be excluded or the row would always match itself.
        AND a.id <> NEW.id
   ) THEN
+    SELECT name INTO offender_name FROM public.members WHERE id = NEW.member_id;
+
     -- unique_violation so callers already handling 23505 keep working, and so a test can assert a
-    -- stable code rather than message text.
-    RAISE EXCEPTION 'Mitglied % ist am % bereits eingeteilt', NEW.member_id, target_date
+    -- stable code rather than message text. The name lookup falls back to the id so a missing
+    -- member row cannot make the exception itself fail.
+    RAISE EXCEPTION 'Mitglied % ist am % bereits eingeteilt',
+      COALESCE(offender_name, NEW.member_id::text), target_date
       USING ERRCODE = 'unique_violation';
   END IF;
 
@@ -140,7 +155,7 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS on_assignment_double_booking ON assignments;
-CREATE TRIGGER on_assignment_double_booking AFTER INSERT ON assignments
+CREATE TRIGGER on_assignment_double_booking AFTER INSERT OR UPDATE OF member_id, workdate_id ON assignments
   FOR EACH ROW EXECUTE FUNCTION public.reject_double_booking();
 
 -- Without this, PostgREST keeps answering PGRST205 for the new table and the changed view until it

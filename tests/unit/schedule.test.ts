@@ -328,6 +328,23 @@ describe('generateAssignments across Bereiche', () => {
     expect(drafts).toHaveLength(1);
   });
 
+  it('claims a member available for two Bereiche for Sportheim-Bewirtung first', () => {
+    // GIVEN one calendar date carrying both Bereiche, with Fruehschoppen listed first so a
+    // first-appearance order would hand the member to Fruehschoppen instead
+    const workDates = [
+      workDate('fr1', '2026-09-20', { bereich: 'Fruehschoppen' }),
+      workDate('sh1', '2026-09-20', { bereich: 'Sportheim-Bewirtung' }),
+    ];
+    const members = [member('scarce', { bereiche: ['Sportheim-Bewirtung', 'Fruehschoppen'] })];
+
+    // WHEN generating
+    const drafts = generateAssignments({ members, workDates, cooldownDays: 0 });
+
+    // THEN Sportheim-Bewirtung claims the member, since it is the priority Bereich and the
+    // same-date rule leaves Fruehschoppen unfilled rather than double-booking them
+    expect(drafts).toEqual([{ member_id: 'scarce', workdate_id: 'sh1', status: 'Draft' }]);
+  });
+
   it('places the same member on adjacent dates in different Bereiche when cooldown allows', () => {
     // GIVEN two neighboring dates in different Bereiche and no cooldown
     const workDates = [

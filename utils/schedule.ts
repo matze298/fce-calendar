@@ -39,6 +39,14 @@ export type GenerateInput = {
 const MS_PER_DAY = 86_400_000;
 
 /**
+ * The order in which Bereiche claim a member available for several of them, matching the enum's
+ * declaration order. Sportheim-Bewirtung is the largest duty area and the only one the club has
+ * ever run, so it gets first claim on a scarce member ahead of the others. A Bereich absent from
+ * this list sorts last rather than being dropped, so a future enum value still gets generated.
+ */
+const BEREICH_PRIORITY = ['Sportheim-Bewirtung', 'Fruehschoppen', 'Sportplatz-Ordner'];
+
+/**
  * Builds the draft plan, one Bereich at a time, in three phases per Bereich: Seniors onto important
  * shifts, then weekend-available members onto weekends, then weekday-available members onto the
  * rest. A member is only ever considered for a Bereich they are listed as available for.
@@ -50,9 +58,10 @@ const MS_PER_DAY = 86_400_000;
  * short. The one cross-Bereich rule is that nobody is drafted twice onto the same calendar date,
  * matching the database trigger that enforces it.
  *
- * The Bereiche are iterated in the order they first appear in `workDates`, which is stable for a
- * given input but not alphabetical. That is fine: Bereiche never compete with each other for
- * slots, only for people, and the same-date exclusion is the only place they interact.
+ * The Bereiche are iterated in BEREICH_PRIORITY order rather than however `workDates` happens to
+ * list them, so a member available for several always claims the same Bereich's slot first
+ * regardless of caller ordering. Bereiche never compete with each other for slots, only for
+ * people, and the same-date exclusion above is the only place they interact.
  */
 export function generateAssignments({
   members,
@@ -65,7 +74,15 @@ export function generateAssignments({
   const isoDateById = new Map(workDates.map(d => [d.id, d.date]));
   const drafts: DraftAssignment[] = [];
 
-  for (const bereich of [...new Set(workDates.map(d => d.bereich))]) {
+  const bereichRank = (bereich: string) => {
+    const index = BEREICH_PRIORITY.indexOf(bereich);
+    return index === -1 ? BEREICH_PRIORITY.length : index;
+  };
+  const bereiche = [...new Set(workDates.map(d => d.bereich))].sort(
+    (a, b) => bereichRank(a) - bereichRank(b),
+  );
+
+  for (const bereich of bereiche) {
     const bereichDates = workDates.filter(d => d.bereich === bereich);
     const candidates = members.filter(m => m.bereiche.includes(bereich));
 

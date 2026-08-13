@@ -15,8 +15,8 @@ For what the app does and how it is built, read the blueprints and `docs/WEBAPP_
   cannot log in until real values are filled in. See `DEVELOPER.md` section 3
 - CI gates every PR on pytest with ruff and ty, Playwright E2E, a pgTAP suite run against a local
   Supabase instance, and frontend lint, type check, unit tests and build
-- The pgTAP suite (`supabase/tests/access_control_test.sql`, 47 assertions) exercises the real RLS
-  policies and grants against a real Postgres instance. The Playwright suite still mocks the entire
+- The pgTAP suite (`supabase/tests/access_control_test.sql`) exercises the real RLS policies and
+  grants against a real Postgres instance. The Playwright suite still mocks the entire
   Supabase layer, so no test exercises authentication or RLS through an actual browser session
 
 ## Before the first real member record

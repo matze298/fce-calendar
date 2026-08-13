@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(50);
+SELECT plan(52);
 
 -- GIVEN three auth accounts: an approved admin, an approved plain member, and an admin
 -- whose account has not been approved.
@@ -378,6 +378,21 @@ SELECT is((SELECT count(*) FROM member_bereiche
           2::bigint,
           'an admin can add a second Bereich to a member');
 
+-- GIVEN an approved admin, reading Bereich rows that belong to a member other than themselves
+SELECT set_config('request.jwt.claims',
+                  json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000001',
+                                    'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+-- WHEN they read that other member's availability
+-- THEN both rows come back, which is what the generator's admin-scoped read of member_bereiche
+-- depends on to see every member's availability rather than just the admin's own
+SELECT is((SELECT count(*) FROM member_bereiche
+            WHERE member_id = 'eeeeeeee-0000-0000-0000-000000000006'),
+          2::bigint,
+          'an admin reads another member''s Bereich availability');
+RESET ROLE;
+
 -- GIVEN a brand new member and their default Bereich row, inserted together in a single
 -- data-modifying CTE
 -- WHEN that statement runs. Both explicit inserts complete before the row-level AFTER trigger
@@ -486,6 +501,15 @@ SELECT lives_ok(
     SELECT m.id, 'ffffffff-0000-0000-0000-000000000003', 'Draft'
       FROM members m WHERE m.email = 'pgtap.member@example.com'$$,
   'the same member takes a duty on a different date');
+
+-- WHEN that same member's duty on the other date is moved, by UPDATE rather than INSERT, onto
+-- the Sportplatz-Ordner row that shares a calendar date with the Sportheim duty they already hold
+-- THEN the trigger still refuses, closing the path an INSERT-only trigger would miss
+SELECT throws_ok(
+  $$UPDATE assignments SET workdate_id = 'ffffffff-0000-0000-0000-000000000002'
+     WHERE workdate_id = 'ffffffff-0000-0000-0000-000000000003'
+       AND member_id = (SELECT id FROM members WHERE email = 'pgtap.member@example.com')$$,
+  '23505', NULL, 'moving an assignment onto a date the member already works is refused');
 
 SELECT * FROM finish();
 ROLLBACK;
