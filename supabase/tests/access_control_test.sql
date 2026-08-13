@@ -339,10 +339,10 @@ SELECT lives_ok(
       ON CONFLICT (date, bereich) DO UPDATE SET required_people = excluded.required_people$$,
   'an upsert targeting (date, bereich) succeeds');
 
--- WHEN an upsert names only the old (date) column as its conflict target, the way the admin UI
--- did before this migration
--- THEN Postgres refuses it outright, because UNIQUE (date) no longer exists and a conflict target
--- must match an existing unique constraint exactly rather than a subset of one
+-- WHEN an upsert names only the date column as its conflict target
+-- THEN Postgres refuses it outright, because a conflict target must match an existing unique
+-- constraint exactly rather than a subset of one, and the only one covering date also covers
+-- bereich. This is the contract app/admin/dates/page.tsx depends on for every save and edit.
 SELECT throws_ok(
   $$INSERT INTO work_dates (date, bereich) VALUES ('2099-03-01', 'Sportheim-Bewirtung')
       ON CONFLICT (date) DO UPDATE SET required_people = excluded.required_people$$,

@@ -41,7 +41,7 @@ member-facing pages:
 
 Two triggers sit alongside the RLS policies above:
 
-| Trigger | Enforces |
+| Trigger | What it does |
 | :--- | :--- |
 | `on_member_created` | A new member gets a `member_bereiche` row for `Sportheim-Bewirtung` automatically. |
 | `on_assignment_double_booking` | A member cannot hold a second assignment on a calendar date already worked, in any Bereich. |
